@@ -5,7 +5,9 @@
 - Next: Milestone 2 (context bundle and knowledge loader), but first verify Vaani capabilities (see below).
 - GitHub: private repo https://github.com/alankratishinde-svg/aangan-enquiry-agent (pushed).
 - `.env.local` created (gitignored) with Vaani key, plus Gemini key and Supabase URL/service key copied from the Two Tickets project at user request.
-- WARNING: that Supabase project (nygjjubcosuregacjacm) is the live Two Tickets database. Migration NOT applied. Recommend a separate Supabase project for Aangan (customer phone numbers and transcripts). User decision pending.
+- Supabase: user chose to reuse project `nygjjubcosuregacjacm` (mesa-ai-track, ap-south-1, shared with Two Tickets). Migration `aangan_init` APPLIED on 2026-10-07 via MCP, plus the 4 placeholder designers. Verified: 8 Aangan tables, RLS on for all 8, 4 designers. No name collisions. Aangan tables share a DB with another app: consider moving to a dedicated project before real customer data arrives.
+- Security advisor: Aangan tables only trigger INFO 'RLS enabled, no policy' (intended: service role only). Separate from Aangan: 5 Two Tickets tables (groups, members, constraints, listings, reactions) have RLS OFF, flagged ERROR by Supabase. Not touched. Remediation SQL: `alter table public.<t> enable row level security;` for each, but it blocks anon access, so Two Tickets code may need policies first.
+- `SUPABASE_ANON_KEY` set to the project's publishable key.
 
 ## Milestone 1 delivered
 - `knowledge/` (services, pricing, qualified), `CLAUDE.md`, `PROGRESS.md`, `.gitignore` (covers `.env.local`), `.env.example`.
