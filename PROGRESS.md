@@ -1,8 +1,9 @@
 # PROGRESS
 
 ## Status (2026-10-07)
-- Milestone 1 (Foundation): DONE. Acceptance test passed: migrations apply cleanly (8 tests, `npm test`).
-- Next: Milestone 2 (context bundle and knowledge loader), but first verify Vaani capabilities (see below).
+- Milestone 1 (Foundation): DONE. Migrations apply cleanly.
+- Milestone 2 (Context bundle and knowledge loader): DONE. 21 tests in `tests/context-bundle.test.ts`, all pass. Includes the acceptance test (edit a knowledge file, next call reflects it). `npm test` = 29 pass, 1 skipped placeholder. `npm run typecheck` clean.
+- Next: Milestone 3 (classification). Needs Gemini (key present). Milestone 4 blocked on the BYOL hosting decision.
 - GitHub: private repo https://github.com/alankratishinde-svg/aangan-enquiry-agent (pushed).
 - `.env.local` created (gitignored) with Vaani key, plus Gemini key and Supabase URL/service key copied from the Two Tickets project at user request.
 - Supabase: user chose to reuse project `nygjjubcosuregacjacm` (mesa-ai-track, ap-south-1, shared with Two Tickets). Migration `aangan_init` APPLIED on 2026-10-07 via MCP, plus the 4 placeholder designers. Verified: 8 Aangan tables, RLS on for all 8, 4 designers. No name collisions. Aangan tables share a DB with another app: consider moving to a dedicated project before real customer data arrives.
@@ -15,6 +16,21 @@
 - `supabase/seed.sql`: 4 placeholder designers with test calendar IDs.
 - `tests/migrations.test.ts`: runs migrations plus seed on real Postgres (PGlite, in-process, no cloud). Checks tables, RLS enabled, constraints, designer-only-sees-own-leads, calls hidden from `authenticated`.
 - `tests/enquiries-replay.test.ts`: skipped placeholder until `/enquiries/` arrives.
+
+## Milestone 2 delivered (`src/lib/`)
+- `knowledge.ts`: reads services/pricing/qualified fresh per call, no cache. Missing file throws.
+- `pricing.ts`: `extractDeflection` pulls the exact line from `pricing.md`. `agentSafePricingRules` returns only the "What the agent must never say" section.
+- `instructions.ts`: builds the agent system prompt (role, hard rules, conversation flow, slots, services.md and qualified.md verbatim).
+- `slots.ts`, `calendar.ts`, `designers.ts`: slot grid from config (45 min, 10am to 7pm, Mon to Sat), lead time, after-hours flag, free-slot search over a `CalendarAdapter` port (in-memory mock now, Google in Milestone 5).
+- `context-bundle.ts`: `buildContextBundle` returns knowledge, deflection, next 8 free slots, instructions. Any failure throws `ContextLoadError` so a call can be marked failed.
+- `config.ts`: env config. Only `Asia/Kolkata` supported (fixed +05:30, no DST).
+
+### Design decisions in Milestone 2 (confirm ok)
+- The rate tables in `pricing.md` are NOT put in the agent's instructions, only the deflection line and never-say rules. The agent cannot leak what it never sees. Brief says the agent builds from all three files; this is the safer reading of hard rule 1. The loader fails closed if the never-say section ever contains a rupee figure or the deflection line disappears. Internal estimates (Milestone 6) read `pricing.md` separately, server-side.
+- `qualified.md` is passed verbatim and contains an example rupee amount (criterion 4). That is rubric text, not a price quote. Hard rule still forbids saying any price.
+- Added `BOOKING_LEAD_MINUTES` (default 120): no slot starts sooner than that after the call. Not in the brief.
+- Deflection language: exact text is English. For Hindi or Marathi callers the agent says it in English as written. Translating would change the approved wording. Ask Nikhil whether an approved Hindi/Marathi version is wanted.
+- Offered slots: next 8 distinct start times, one designer per time (first in list). Fair rotation is Milestone 5.
 
 ## Schema additions beyond the brief (confirm ok)
 - `calls.callback_due_at`, `calls.called_back_at`: needed for the 1-hour callback metric (section 9).

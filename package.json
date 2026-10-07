@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:migrations": "vitest run tests/migrations.test.ts"
+    "test:migrations": "vitest run tests/migrations.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",
+    "@types/node": "^26.6.4",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   }
