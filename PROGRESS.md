@@ -3,7 +3,9 @@
 ## Status (2026-10-07)
 - Milestone 1 (Foundation): DONE. Acceptance test passed: migrations apply cleanly (8 tests, `npm test`).
 - Next: Milestone 2 (context bundle and knowledge loader), but first verify Vaani capabilities (see below).
-- No GitHub remote yet. Local git only. Need a remote URL from user to push.
+- GitHub: private repo https://github.com/alankratishinde-svg/aangan-enquiry-agent (pushed).
+- `.env.local` created (gitignored) with Vaani key, plus Gemini key and Supabase URL/service key copied from the Two Tickets project at user request.
+- WARNING: that Supabase project (nygjjubcosuregacjacm) is the live Two Tickets database. Migration NOT applied. Recommend a separate Supabase project for Aangan (customer phone numbers and transcripts). User decision pending.
 
 ## Milestone 1 delivered
 - `knowledge/` (services, pricing, qualified), `CLAUDE.md`, `PROGRESS.md`, `.gitignore` (covers `.env.local`), `.env.example`.
@@ -22,10 +24,18 @@
 - `needed_by` is a `date`. Callers say "in 8 weeks"; the classifier will convert to a date.
 - Migration test uses a stub for Supabase `auth.uid()` and roles. Real apply on Supabase happens when a project exists.
 
-## Vaani: needs verification before Milestone 4
-- User has a real `VAANI_API_KEY` (goes in `.env.local`, never printed or committed).
-- Docs link: the pasted message still had the placeholder "[paste the docs link here]". Need the real link.
-- To verify with docs and the real API: (a) fresh instructions and context per inbound call, (b) mid-call tool calls to our backend, (c) one end-of-call webhook with transcript, (d) Hindi, Marathi, English.
+## Vaani findings (2026-10-07, from https://docs.vaanivoice.ai and the real API)
+Docs: https://docs.vaanivoice.ai (index at /llms.txt, spec at /api-reference/openapi.json). API base: `https://api.vaanivoice.ai`. Auth header: `X-API-Key`. Key in `.env.local` verified: `GET /api/agents` returns 200 (bad key returns 401). Account has 0 agents, so no agent_id and no phone number yet.
+
+| Need | Result |
+|---|---|
+| (a) Fresh context per INBOUND call | NOT documented. Per-call `metadata` and `modify_agent` exist only on Create Dispatch (`/api/trigger-call/`), which is outbound telephony or WebRTC. Inbound calls are routed by number (`deployment.Inbound`) with no per-call injection hook. |
+| (b) Mid-call tool calls to our backend | NOT documented as a native feature. Agent config has `persona.actions.functions` (shape undocumented, provider-specific). Documented alternative: BYOL. Vaani opens one WebSocket per call to our server, sends every turn with full transcript plus system prompt, we stream back replies. We run the LLM, so `classify_lead` and `book_slot` are our own code. |
+| (c) End-of-call webhook with transcript | YES, with a caveat. Webhooks are per-event (`call_started`, `call_ended`, ...). Transcript, summary, entities, dispositions, recording URL arrive in `call_postprocessing`, sent after `call_ended`. We store only `call_postprocessing` (plus `call_ended`/`call_failed` for failure handling). Payload carries no structured answers or verdict, so our backend must hold those itself. |
+| (d) Hindi, Marathi, English | Hindi and English documented (`primary_language`, `secondary_language`, auto-detect flag). Dashboard bundle lists Marathi (`mr`) but docs do not confirm STT/TTS quality. Must test with a real Marathi call. Language params in docs are marked WebRTC only for Create Dispatch. |
+
+Consequence: the brief's design (context loaded once, mid-call tool calls, one session) fits Vaani only through BYOL. BYOL needs a long-lived WebSocket server. Vercel serverless cannot host that, so we need a small separate host (for example Fly.io or Railway) for the call brain. Decision needed from user before Milestone 4.
+Other gaps: no calendar tool in Vaani except a Cal.com integration (brief says Google Calendar, so booking also runs in our BYOL server). Vaani docs say nothing on how inbound webhook ties to the caller number beyond `phone_number` in some events: verify with a real call.
 - All Vaani calls go behind an adapter interface with a mock for tests. No real calls in automated tests.
 
 ## Decisions from user (2026-10-07)
