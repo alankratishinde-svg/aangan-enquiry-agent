@@ -1,0 +1,15 @@
+{
+  "name": "aangan-enquiry-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:migrations": "vitest run tests/migrations.test.ts"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
