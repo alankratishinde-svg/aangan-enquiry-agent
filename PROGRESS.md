@@ -101,6 +101,10 @@ Other gaps: no calendar tool in Vaani except a Cal.com integration (brief says G
 3. Timeline conflict: `qualified.md` says 8 to 10 weeks; `services.md` says 6 week minimum. Default (flags `TIMELINE_FAIL_UNDER_WEEKS=6`, `TIMELINE_PASS_FROM_WEEKS=10`): under 6 = fail; 6 to 10 = unclear, ask one question; 10+ = pass.
 4. Rubric learning loop: approval step stays on (user decision). Nikhil approves.
 
+## Cal.com (2026-10-10)
+- `CALCOM_API_KEY` saved in `.env.local` (gitignored). Verified read-only: `GET https://api.cal.com/v2/me` returns 200 (Bearer auth), account timezone Asia/Kolkata, one user. Event types found: 30min, 15min, secret (15). No 45-minute type yet.
+- Brief says Google Calendar, Cal.com only if asked. Decision pending: is Cal.com now the booking tool? One Cal.com user = one calendar, but the brief has 4 designers with separate calendars (needs a Cal.com team with round-robin, or 4 accounts/keys). Vaani also has a native Cal.com integration, but with BYOL our own server would book through the API.
+
 ## Milestones
 1. Foundation [x]
 2. Context bundle and knowledge loader [ ]
