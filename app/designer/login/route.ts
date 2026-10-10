@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { DESIGNER_COOKIE } from "../../../src/server/designer";
 import { designerByToken, setSession } from "../../../src/server/session";
+import { cookies } from "next/headers";
 
 /** Designer sign-in: the link in their lead email carries a personal token. */
 export async function GET(req: Request) {
@@ -9,7 +11,8 @@ export async function GET(req: Request) {
     const d = await designerByToken(token);
     if (d) {
       await setSession({ kind: "designer", designerId: d.id, name: d.name });
-      return NextResponse.redirect(new URL(`/${url.searchParams.get("lead") ? `?lead=${encodeURIComponent(url.searchParams.get("lead")!)}` : ""}#leads`, url.origin));
+      (await cookies()).set(DESIGNER_COOKIE, d.id, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production" });
+      return NextResponse.redirect(new URL(`/designer/leads${url.searchParams.get("lead") ? `?lead=${encodeURIComponent(url.searchParams.get("lead")!)}` : ""}`, url.origin));
     }
   }
   return new NextResponse(

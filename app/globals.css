@@ -37,3 +37,16 @@ details { margin: 8px 0; } pre { white-space: pre-wrap; font: 13px/1.5 ui-monosp
 .banner { padding: 10px 14px; border-radius: 8px; background: var(--chip); border: 1px solid var(--warn); margin: 12px 0; }
 table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
 @media (max-width: 600px) { main { padding: 14px 12px 50px; } }
+
+/* navigation and the new pages */
+header.top .brand { text-decoration: none; color: var(--ink); }
+.testbar { background: var(--chip); border-bottom: 1px solid var(--warn); color: var(--warn); text-align: center; font-size: 14px; padding: 6px 12px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.subnav { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.subnav a { text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 14px; }
+.subnav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.picker { display: flex; align-items: center; gap: 8px; }
+.status { font-size: 18px; margin: 4px 0 20px; }
+.bigcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.bigcard { padding: 22px; } .bigcard h2 { margin: 0 0 6px; font-size: 22px; } .bigcard li { padding: 6px 0; border-top: 1px solid var(--line); } .bigcard li:first-child { border-top: 0; }
+.btn { text-decoration: none; display: inline-flex; align-items: center; }

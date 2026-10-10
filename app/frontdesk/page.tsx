@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** The separate dashboards were merged into one. */
+/** Old address. The review queue now lives under the Nikhil dashboard. */
 export default function Page() {
-  redirect("/#review");
+  redirect("/nikhil/review");
 }

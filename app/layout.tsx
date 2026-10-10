@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { openAccess } from "../src/server/session";
 import "./globals.css";
 
-export const metadata: Metadata = { title: "Aangan enquiries", description: "Phone enquiries, leads and reviews for Aangan Studio" };
+export const metadata: Metadata = { title: "Aangan Studio", description: "Phone enquiries, leads and reviews for Aangan Studio" };
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -9,15 +11,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <header className="top">
-          <strong>Aangan enquiries</strong>
+          <Link href="/" className="brand"><strong>Aangan Studio</strong></Link>
           <nav>
-            <a href="/#overview">This week</a>
-            <a href="/#leads">Leads</a>
-            <a href="/#review">Needs review</a>
-            <a href="/#callbacks">Callbacks</a>
-            <a href="/#rubric">Rubric</a>
+            <Link href="/designer">Designer dashboard</Link>
+            <Link href="/nikhil">Nikhil dashboard</Link>
           </nav>
         </header>
+        {openAccess() && <div className="testbar" role="note">Test mode: no sign-in</div>}
         <main>{children}</main>
       </body>
     </html>

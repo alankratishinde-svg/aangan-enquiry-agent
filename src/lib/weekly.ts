@@ -40,6 +40,28 @@ export async function runWeekly(
   const metrics = await weekMetrics(sql, weekStart, now);
   const from = `${weekStart}T00:00:00+05:30`;
 
+  const summary = await writeImprovement(sql, deps.gemini, { from, metrics, weekStart, promptsDir: deps.promptsDir });
+  await sql.query(
+    `insert into weekly_summaries (week_start, counts, improvement_summary) values ($1, $2::jsonb, $3)
+     on conflict (week_start) do update set counts = excluded.counts, improvement_summary = excluded.improvement_summary`,
+    [weekStart, JSON.stringify(metrics), summary],
+  );
+
+  const proposalId = await draftRubricProposal(sql, deps.gemini, deps.rubricMd, from, deps.promptsDir);
+  return { weekStart, metrics, summary, proposalId };
+}
+
+
+/**
+ * Gemini Flash writes the "what can be improved for unqualified leads" note from the stored reasons and decisions in
+ * the 7 days starting at `from`. Any price is scrubbed. Never throws: a fallback sentence is returned instead.
+ */
+export async function writeImprovement(
+  sql: Sql,
+  gemini: GeminiClient,
+  o: { from: string; metrics: WeekMetrics; weekStart: string; promptsDir?: string },
+): Promise<string> {
+  const { from, metrics, weekStart } = o;
   const reasons = (
     await sql.query<{ criterion: string; status: string; n: number }>(
       `select c->>'criterion' criterion, c->>'status' status, count(*)::int n
@@ -57,10 +79,10 @@ export async function runWeekly(
     )
   ).rows;
 
-  const p = await prompt("weekly_summary.v1", deps.promptsDir);
+  const p = await prompt("weekly_summary.v1", o.promptsDir);
   let summary: string;
   try {
-    summary = await deps.gemini.generate({
+    summary = await gemini.generate({
       system: p.system,
       user: fill(p.user, { WEEK_START: weekStart, METRICS: JSON.stringify(metrics, null, 2), REASONS: JSON.stringify(reasons), DECISIONS: JSON.stringify(decisions) }),
     });
@@ -69,14 +91,21 @@ export async function runWeekly(
   } catch {
     summary = "The written summary could not be generated this week. See the counts above.";
   }
+  return summary;
+}
+
+/** On demand (the Improve page): the last 7 days, stored under this week's row. */
+export async function runImprove(sql: Sql, gemini: GeminiClient, now: Date = new Date(), promptsDir?: string): Promise<string> {
+  const weekStart = weekStartIst(now);
+  const metrics = await weekMetrics(sql, weekStart, now);
+  const from = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+  const summary = await writeImprovement(sql, gemini, { from, metrics, weekStart, promptsDir });
   await sql.query(
     `insert into weekly_summaries (week_start, counts, improvement_summary) values ($1, $2::jsonb, $3)
      on conflict (week_start) do update set counts = excluded.counts, improvement_summary = excluded.improvement_summary`,
     [weekStart, JSON.stringify(metrics), summary],
   );
-
-  const proposalId = await draftRubricProposal(sql, deps.gemini, deps.rubricMd, from, deps.promptsDir);
-  return { weekStart, metrics, summary, proposalId };
+  return summary;
 }
 
 const Proposal = z.object({ change: z.boolean(), rationale: z.string().default(""), new_text: z.string().nullable().default(null) });

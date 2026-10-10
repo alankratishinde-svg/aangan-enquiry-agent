@@ -52,17 +52,6 @@ export async function currentRole(): Promise<Role | null> {
  */
 export const openAccess = () => process.env.OPEN_ACCESS === "true";
 
-export type Scope = { scope: "all" } | { scope: "designer"; designerId: string; name: string };
-
-/** The one dashboard. Open mode and team sign-in see everything; a designer's personal link sees only their leads. */
-export async function requireDashboard(): Promise<Scope> {
-  if (openAccess()) return { scope: "all" };
-  const r = await currentRole();
-  if (r?.kind === "designer") return { scope: "designer", designerId: r.designerId, name: r.name };
-  if (r?.kind === "frontdesk") return { scope: "all" };
-  redirect("/login");
-}
-
 /** Actions that touch the whole team's data (review, callbacks, rubric). Designers cannot. */
 export async function requireTeam(): Promise<void> {
   if (openAccess()) return;

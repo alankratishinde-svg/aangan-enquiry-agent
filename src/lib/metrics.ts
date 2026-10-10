@@ -3,7 +3,7 @@ import type { Sql } from "./postcall/db";
 export interface WeekMetrics {
   weekStart: string;
   counts: { qualified: number; unqualified: number; failed: number; total: number };
-  response: { medianSeconds: number | null; underFiveMinutesPct: number | null };
+  response: { medianSeconds: number | null; averageSeconds: number | null; underFiveMinutesPct: number | null; answered: number; answeredPct: number | null };
   failed: { total: number; calledBack: number; calledBackWithinHour: number; withinHourPct: number | null; medianMinutesToCallback: number | null; overdue: number };
   flags: { priceSpoken: number; bookingBeforeQualified: number };
   review: { pendingUnqualified: number; pendingCompliance: number; converted: number; deleted: number };
@@ -28,8 +28,8 @@ export async function weekMetrics(sql: Sql, weekStart: string, now: Date = new D
     `select count(*) filter (where status='qualified')::int qualified, count(*) filter (where status='unqualified')::int unqualified,
             count(*) filter (where status='failed')::int failed from calls where ${win}`,
   );
-  const r = await one<{ median: number | null; under5: number | null }>(
-    `select percentile_cont(0.5) within group (order by response_seconds)::float median,
+  const r = await one<{ median: number | null; avg: number | null; answered: number; under5: number | null }>(
+    `select percentile_cont(0.5) within group (order by response_seconds)::float median, avg(response_seconds)::float avg, count(response_seconds)::int answered,
             (100.0 * count(*) filter (where response_seconds < 300) / nullif(count(response_seconds), 0))::float under5
        from calls where ${win} and response_seconds is not null`,
   );
@@ -55,7 +55,10 @@ export async function weekMetrics(sql: Sql, weekStart: string, now: Date = new D
   return {
     weekStart,
     counts: { ...c, total: c.qualified + c.unqualified + c.failed },
-    response: { medianSeconds: r.median, underFiveMinutesPct: r.under5 === null ? null : Math.round(r.under5) },
+    response: {
+      medianSeconds: r.median, averageSeconds: r.avg === null ? null : Math.round(r.avg), underFiveMinutesPct: r.under5 === null ? null : Math.round(r.under5),
+      answered: r.answered, answeredPct: c.qualified + c.unqualified + c.failed ? Math.round((100 * r.answered) / (c.qualified + c.unqualified + c.failed)) : null,
+    },
     failed: {
       total: f.total, calledBack: f.called_back, calledBackWithinHour: f.within_hour,
       withinHourPct: f.total ? Math.round((100 * f.within_hour) / f.total) : null,

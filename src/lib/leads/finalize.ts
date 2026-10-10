@@ -132,7 +132,7 @@ export async function finalizeQualifiedLead(leadId: string, deps: FinalizeDeps):
             designerName: designer.name, designerEmail: designer.email, name: lead.name, phone: lead.phone, email: lead.email,
             projectType: lead.projectType, areaSqFt: lead.areaSqFt, location: lead.location, neededBy: lead.neededBy,
             clientSize: lead.clientSize, summary: lead.summary, bookedSlotIst: lead.bookedSlot ? formatSlotIst(new Date(lead.bookedSlot), new Date(new Date(lead.bookedSlot).getTime() + deps.config.consultationMinutes * 60_000)) : null,
-            handoffNotes: lead.handoffNotes, estimateText: out.estimate || "See pricing.md", dashboardUrl: `${base}/?lead=${lead.id}#lead-${lead.id}`,
+            handoffNotes: lead.handoffNotes, estimateText: out.estimate || "See pricing.md", dashboardUrl: `${base}/designer/leads?lead=${lead.id}`,
           }),
         );
         await store.updateLead(leadId, { emailSentNow: true });

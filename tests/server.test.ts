@@ -7,12 +7,15 @@ import { loadConfig } from "../src/lib/config";
 import { MockEmailSender } from "../src/lib/email";
 import { MockGemini, type GenerateRequest } from "../src/lib/gemini";
 import { ConvertError, convertLead } from "../src/lib/leads/convert";
+import { loadCostConfig, summariseCost } from "../src/lib/cost";
+import { safeText } from "../src/lib/display";
 import { weekMetrics, weekStartIst } from "../src/lib/metrics";
+import { chooseDesigner } from "../src/server/designer";
 import { pgliteDb } from "../src/lib/postcall/db";
 import { MockHubspotClient } from "../src/lib/postcall/hubspot";
 import { PostCallStore } from "../src/lib/postcall/store";
-import { draftRubricProposal, previousWeekStart, runWeekly } from "../src/lib/weekly";
-import { callbackList, decideProposal, designerLeads, leadsFor, markCalledBack, pendingReview, progressPct, resolveReview, setRequirement } from "../src/server/queries";
+import { draftRubricProposal, previousWeekStart, runImprove, runWeekly } from "../src/lib/weekly";
+import { activeDesigners, callbackList, callDetail, costCounts, decideProposal, designerLeads, flaggedCalls, homeCounts, leadsFor, markCalledBack, upcomingConsultations, pendingReview, progressPct, resolveReview, setRequirement } from "../src/server/queries";
 
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, set: () => undefined, delete: () => undefined }) }));
 vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`redirect:${u}`); } }));
@@ -233,6 +236,18 @@ describe("weekly job and rubric proposals", () => {
     expect(w!.counts.counts.total).toBe(1);
   });
 
+  it("the Improve page: writes suggestions for the last 7 days, stores them under this week, hides any price", async () => {
+    const now = new Date("2026-10-15T06:00:00Z");
+    await seedCall("q", "qualified", { at: "2026-10-13T05:00:00Z" });
+    const g = new MockGemini(() => "- Ask about the area first.\n- Budget talk like Rs 5 lakh must not appear.");
+    const text = await runImprove(sql, g, now);
+    expect(text).toMatch(/Ask about the area/);
+    expect(text).not.toMatch(/lakh/);
+    const [w] = await q<{ week_start: string; improvement_summary: string }>("select to_char(week_start, 'YYYY-MM-DD') as week_start, improvement_summary from weekly_summaries");
+    expect(w!.week_start).toBe("2026-10-12");
+    expect(w!.improvement_summary).toBe(text);
+  });
+
   it("a price in the written summary is withheld", async () => {
     const g = new MockGemini(() => "Calls cost Rs 5 lakh on average.");
     const r = await runWeekly(sql, { gemini: g, rubricMd: knowledge.qualified, weekStart: "2026-10-12" });
@@ -290,14 +305,12 @@ describe("sessions", () => {
     expect(readSession(undefined)).toBeNull();
     expect(readSession("garbage")).toBeNull();
   });
-  it("one dashboard: OPEN_ACCESS shows everything without sign-in; otherwise it needs the team sign-in or a designer link", async () => {
-    const { requireDashboard, requireTeam, openAccess } = await import("../src/server/session");
+  it("OPEN_ACCESS test mode needs no sign-in; otherwise the team pages redirect to /login", async () => {
+    const { requireTeam, openAccess } = await import("../src/server/session");
     delete process.env.OPEN_ACCESS;
     expect(openAccess()).toBe(false);
-    await expect(requireDashboard()).rejects.toThrow(/redirect:\/login/);
     await expect(requireTeam()).rejects.toThrow(/redirect:\/login/);
     process.env.OPEN_ACCESS = "true";
-    expect(await requireDashboard()).toEqual({ scope: "all" });
     await expect(requireTeam()).resolves.toBeUndefined();
     process.env.OPEN_ACCESS = "false";
     expect(openAccess()).toBe(false);
@@ -309,5 +322,114 @@ describe("sessions", () => {
     expect(passwordOk("wrong", "hunter2hunter2")).toBe(false);
     expect(passwordOk("", undefined)).toBe(false);
     expect(passwordOk("short", "short")).toBe(false);
+  });
+});
+
+describe("home counts", () => {
+  it("counts calls and qualified since midnight India time, and everything pending review", async () => {
+    const now = new Date("2026-10-12T10:00:00Z"); // 15:30 IST
+    await seedCall("today-q", "qualified", { at: "2026-10-12T05:00:00Z" });
+    await seedCall("today-u", "unqualified", { at: "2026-10-12T06:00:00Z" });
+    await seedCall("late-night", "qualified", { at: "2026-10-11T19:00:00Z" }); // 00:30 IST on the 12th: today
+    await seedCall("yesterday", "qualified", { at: "2026-10-11T17:00:00Z" }); // 22:30 IST on the 11th: not today
+    await seedReview(await seedLead(await seedCall("r1", "unqualified", { at: "2026-10-10T05:00:00Z" })), "unqualified");
+    await seedReview(await seedLead(await seedCall("r2", "qualified", { at: "2026-10-10T05:00:00Z" }), { email: "r@x.co" }), "compliance", [{ type: "price_spoken" }]);
+    expect(await homeCounts(sql, now)).toEqual({ callsToday: 3, qualifiedToday: 2, waitingForReview: 2 });
+  });
+});
+
+describe("designers from the database", () => {
+  it("lists active designers only, by name, nothing hardcoded", async () => {
+    await q(`insert into designers (name, email, google_calendar_id, active) values ('Zed Gone', 'z@x.co', 'cal', false), ('Anika New', 'a@x.co', 'cal', true)`);
+    const names = (await activeDesigners(sql)).map((d) => d.name);
+    expect(names).toContain("Anika New");
+    expect(names).not.toContain("Zed Gone");
+    expect(names.length).toBe(5);
+  });
+  it("chooseDesigner: the cookie picks, an unknown cookie picks nobody, a personal link locks the choice (test mode off)", () => {
+    const ds = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    expect(chooseDesigner("b", ds, null, true)).toEqual({ selected: ds[1], locked: false });
+    expect(chooseDesigner("zzz", ds, null, true)).toEqual({ selected: null, locked: false });
+    expect(chooseDesigner(undefined, ds, null, true)).toEqual({ selected: null, locked: false });
+    expect(chooseDesigner("b", ds, { kind: "designer", designerId: "a" }, false)).toEqual({ selected: ds[0], locked: true });
+    expect(chooseDesigner("b", ds, { kind: "designer", designerId: "a" }, true)).toEqual({ selected: ds[1], locked: false });
+  });
+});
+
+describe("consultations and call detail", () => {
+  it("lists a designer's upcoming bookings only, soonest first", async () => {
+    const [d1, d2] = (await q<{ id: string }>("select id from designers order by name limit 2")).map((x) => x.id);
+    const now = new Date("2026-10-12T00:00:00Z");
+    const mk = async (id: string, slot: string, designer: string, name: string) => {
+      const l = await seedLead(await seedCall(id, "qualified"), { email: `${id}@x.co`, designer, name });
+      await q("update leads set booked_slot = $2 where id = $1", [l, slot]);
+    };
+    await mk("c1", "2026-10-15T05:30:00Z", d1!, "Later");
+    await mk("c2", "2026-10-13T05:30:00Z", d1!, "Sooner");
+    await mk("c3", "2026-10-11T05:30:00Z", d1!, "Past");
+    await mk("c4", "2026-10-14T05:30:00Z", d2!, "Other designer");
+    expect((await upcomingConsultations(sql, d1!, now)).map((c) => c.name)).toEqual(["Sooner", "Later"]);
+  });
+
+  it("a designer can open only calls on their own leads; the team can open any", async () => {
+    const [d1, d2] = (await q<{ id: string }>("select id from designers order by name limit 2")).map((x) => x.id);
+    const call = await seedCall("mine", "qualified");
+    await seedLead(call, { email: "m@x.co", designer: d1 });
+    expect((await callDetail(sql, call, d1!))?.id).toBe(call);
+    expect(await callDetail(sql, call, d2!)).toBeNull();
+    expect((await callDetail(sql, call, null))?.status).toBe("qualified");
+    expect(await callDetail(sql, "not-a-uuid", null)).toBeNull();
+    expect(await callDetail(sql, "00000000-0000-0000-0000-000000000000", null)).toBeNull();
+  });
+});
+
+describe("flags", () => {
+  it("lists calls with a price or an early booking, with their review state", async () => {
+    const c1 = await seedCall("p", "qualified", { price: true });
+    const l1 = await seedLead(c1, { email: "p@x.co", name: "Price caller" });
+    await q(`update calls set flags = $2::jsonb where id = $1`, [c1, JSON.stringify({ price_evidence: { regex: [{ turn: 1, text: "It costs around 15 lakh" }], gemini: [] } })]);
+    const rv = await seedReview(l1, "compliance", [{ type: "price_spoken" }]);
+    const c2 = await seedCall("b", "unqualified");
+    await q("update calls set booking_before_qualified = true where id = $1", [c2]);
+    await seedCall("clean", "qualified");
+    const flags = await flaggedCalls(sql);
+    expect(flags).toHaveLength(2);
+    const p = flags.find((f) => f.name === "Price caller")!;
+    expect(p).toMatchObject({ priceSpoken: true, reviewId: rv, reviewState: "pending" });
+    expect(p.priceEvidence[0]).toMatch(/lakh/); // raw in the query; the page runs it through safeText
+  });
+  it("safeText hides money figures wherever call text is shown", () => {
+    expect(safeText("It costs around Rs 15 lakh, said the agent")).not.toMatch(/15 lakh|Rs 15/);
+    expect(safeText("Budget is ₹1.2 lakh")).toBe("Budget is [budget figure]");
+    expect(safeText("3BHK in Baner, in 8 weeks")).toBe("3BHK in Baner, in 8 weeks");
+    expect(safeText(null)).toBe("");
+  });
+});
+
+describe("overview numbers and cost", () => {
+  it("average response, share answered, and the 300 second target data", async () => {
+    await seedCall("a", "qualified", { at: "2026-10-13T05:00:00Z", resp: 10 });
+    await seedCall("b", "unqualified", { at: "2026-10-13T06:00:00Z", resp: 30 });
+    await q(`insert into calls (vaani_call_id, started_at, status, failure_reason) values ('nr', '2026-10-13T07:00:00Z', 'failed', 'dropped')`);
+    const m = await weekMetrics(sql, "2026-10-12", new Date("2026-10-15T00:00:00Z"));
+    expect(m.response.averageSeconds).toBe(20);
+    expect(m.response.answered).toBe(2);
+    expect(m.response.answeredPct).toBe(67);
+    expect(m.counts).toMatchObject({ qualified: 1, unqualified: 1, failed: 1, total: 3 });
+  });
+
+  it("cost figures come from configuration only and say so when something is missing", async () => {
+    const none = summariseCost(loadCostConfig({}), { calls: 10, qualified: 4 });
+    expect(none.totalCostInr).toBeNull();
+    expect(none.missing).toEqual(["COST_PER_CALL_INR", "INDICATIVE_PROJECT_VALUE_LOW_INR", "INDICATIVE_PROJECT_VALUE_HIGH_INR", "INDICATIVE_CONVERSION_PCT"]);
+    const cfg = loadCostConfig({ COST_PER_CALL_INR: "20", INDICATIVE_PROJECT_VALUE_LOW_INR: "800000", INDICATIVE_PROJECT_VALUE_HIGH_INR: "1400000", INDICATIVE_CONVERSION_PCT: "10", HUBSPOT_PORTAL_ID: "123" });
+    const s = summariseCost(cfg, { calls: 10, qualified: 4 });
+    expect(s).toMatchObject({ totalCostInr: 200, costPerQualifiedLeadInr: 50, valuePerQualifiedLeadInr: 110000, totalIndicativeValueInr: 440000, missing: [] });
+    expect(cfg.hubspotPortalId).toBe("123");
+    expect(summariseCost(cfg, { calls: 0, qualified: 0 }).costPerQualifiedLeadInr).toBeNull();
+    await seedCall("x", "qualified");
+    const l = await seedLead(await seedCall("y", "qualified"), { email: "y@x.co" });
+    await q("update leads set hubspot_deal_id = 'd1' where id = $1", [l]);
+    expect(await costCounts(sql, 30)).toMatchObject({ calls: 2, qualified: 2, hubspotDeals: 1 });
   });
 });

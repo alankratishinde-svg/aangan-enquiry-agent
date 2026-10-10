@@ -1,4 +1,6 @@
 import { convertReview, deleteReview, markReviewed } from "../actions";
+import Link from "next/link";
+import { safeText } from "../../src/lib/display";
 import { ago, istDateTime, pretty } from "../../src/server/format";
 import { pendingReview, type ReviewItem } from "../../src/server/queries";
 import { calcom, db } from "../../src/server/runtime";
@@ -9,8 +11,8 @@ const reasonLine = (r: ReviewItem["reasons"][number]) => {
       const crit = (r.criteria as { criterion: string; status: string; evidence: string }[] | undefined) ?? [];
       return (
         <div>
-          <span className="chip bad">Did not qualify</span> {r.decline_reason ? <span className="small">{String(r.decline_reason)}</span> : null}
-          <ul className="clean small">{crit.map((c, i) => (<li key={i}><strong>{pretty(c.criterion)}</strong>: {c.status}. <span className="muted">{c.evidence}</span></li>))}</ul>
+          <span className="chip bad">Did not qualify</span> {r.decline_reason ? <span className="small">{safeText(String(r.decline_reason))}</span> : null}
+          <ul className="clean small">{crit.map((c, i) => (<li key={i}><strong>{pretty(c.criterion)}</strong>: {c.status}. <span className="muted">{safeText(c.evidence)}</span></li>))}</ul>
         </div>
       );
     }
@@ -38,21 +40,19 @@ export async function Review({ error }: { error?: string }) {
     }
   } catch { /* the form still works without a slot */ }
   const unq = items.filter((i) => i.kind === "unqualified");
-  const comp = items.filter((i) => i.kind === "compliance");
   return (
     <section id="review">
-      <h2>Needs review <span className="muted small">{unq.length} to decide · {comp.length} flagged</span></h2>
+      <h2>Unqualified leads <span className="muted small">{unq.length} to decide</span></h2>
       {error && <p className="banner" role="alert">{error}</p>}
 
-      <h3>Unqualified leads</h3>
       <p className="muted small">Nothing here is deleted by itself. Delete removes the caller's details. To convert, call the person back first, collect their email, then pick a time.</p>
       {unq.length === 0 && <div className="card"><p>Nothing waiting.</p></div>}
       {unq.map((i) => (
         <article className="card" key={i.reviewId}>
           <div className="row"><h3>{i.name ?? "Unnamed caller"} · {pretty(i.projectType)}{i.location ? ` · ${i.location}` : ""}</h3><span className="muted small">{istDateTime(i.startedAt)} ({ago(i.startedAt)})</span></div>
-          <p className="small">Phone: {i.phone ?? "not captured"}{i.summary ? ` · ${i.summary}` : ""}</p>
+          <p className="small">Phone: {i.phone ?? "not captured"}{i.summary ? ` · ${safeText(i.summary)}` : ""} · <Link href={`/nikhil/calls/${i.callId}`}>View the call</Link></p>
           {i.reasons.map((r, k) => (<div key={k}>{reasonLine(r)}</div>))}
-          {i.transcript && <details><summary>Transcript</summary><pre>{i.transcript}</pre></details>}
+          {i.transcript && <details><summary>Transcript</summary><pre>{safeText(i.transcript)}</pre></details>}
           <div className="row" style={{ alignItems: "flex-start", marginTop: 10 }}>
             <form action={convertReview} className="stack">
               <input type="hidden" name="id" value={i.reviewId} />
@@ -72,16 +72,6 @@ export async function Review({ error }: { error?: string }) {
         </article>
       ))}
 
-      <h3>Calls flagged for what the agent did</h3>
-      {comp.length === 0 && <div className="card"><p>No flagged calls.</p></div>}
-      {comp.map((i) => (
-        <article className="card" key={i.reviewId}>
-          <div className="row"><h3>{i.name ?? "Unnamed caller"} · {pretty(i.projectType)}</h3><span className="muted small">{istDateTime(i.startedAt)}</span></div>
-          {i.reasons.map((r, k) => (<div key={k}>{reasonLine(r)}</div>))}
-          {i.transcript && <details><summary>Transcript</summary><pre>{i.transcript}</pre></details>}
-          <form action={markReviewed}><input type="hidden" name="id" value={i.reviewId} /><button>Mark reviewed</button></form>
-        </article>
-      ))}
     </section>
   );
 }

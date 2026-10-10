@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** The separate dashboards were merged into one. */
+/** Old address. Callbacks now live under the Nikhil dashboard. */
 export default function Page() {
-  redirect("/#callbacks");
+  redirect("/nikhil/callbacks");
 }

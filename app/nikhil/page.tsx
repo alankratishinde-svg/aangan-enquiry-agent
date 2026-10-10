@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { Overview } from "../_components/Overview";
 
-/** The separate dashboards were merged into one. */
 export default function Page() {
-  redirect("/#overview");
+  return <Overview />;
 }
