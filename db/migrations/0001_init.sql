@@ -1,6 +1,6 @@
--- Aangan Studio phone-enquiry agent: initial schema.
--- Plain Postgres plus Supabase auth.uid() in RLS policies.
--- Server code uses the service role (bypasses RLS). Designers use authenticated role.
+-- Aangan Studio phone-enquiry agent: initial schema for Neon Postgres.
+-- Plain Postgres only. The Next.js backend connects as the database owner and
+-- scopes each designer to their own leads in application code.
 
 -- gen_random_uuid() is built in since Postgres 13.
 
@@ -10,7 +10,7 @@ create table designers (
   name               text not null,
   email              text not null unique,
   google_calendar_id text not null,
-  auth_user_id       uuid unique,
+  auth_user_id       text unique, -- id from the dashboard login provider, set when designer logins are built
   active             boolean not null default true,
   created_at         timestamptz not null default now()
 );
@@ -124,8 +124,9 @@ create table weekly_summaries (
   created_at          timestamptz not null default now()
 );
 
--- Row level security -----------------------------------------------------
--- Deny by default. Service role bypasses RLS for backend routes and front desk.
+-- Row level security ----------------------------------------------------
+-- Enabled with no policies: any role other than the table owner (for example a
+-- read-only reporting role added later) sees nothing until a policy grants access.
 alter table designers        enable row level security;
 alter table calls            enable row level security;
 alter table leads            enable row level security;
@@ -134,32 +135,3 @@ alter table review_queue     enable row level security;
 alter table decisions        enable row level security;
 alter table rubric_proposals enable row level security;
 alter table weekly_summaries enable row level security;
-
--- Designers: read themselves.
-create policy designers_select_self on designers
-  for select to authenticated
-  using (auth_user_id = auth.uid());
-
--- Designers: read only their own assigned leads.
-create policy leads_select_own on leads
-  for select to authenticated
-  using (assigned_designer_id in (select id from designers where auth_user_id = auth.uid()));
-
--- Designers: read and tick requirements on their own leads.
-create policy requirements_select_own on requirements
-  for select to authenticated
-  using (lead_id in (
-    select l.id from leads l join designers d on d.id = l.assigned_designer_id
-    where d.auth_user_id = auth.uid()));
-
-create policy requirements_update_own on requirements
-  for update to authenticated
-  using (lead_id in (
-    select l.id from leads l join designers d on d.id = l.assigned_designer_id
-    where d.auth_user_id = auth.uid()))
-  with check (lead_id in (
-    select l.id from leads l join designers d on d.id = l.assigned_designer_id
-    where d.auth_user_id = auth.uid()));
-
--- calls, review_queue, decisions, rubric_proposals, weekly_summaries:
--- no policies on purpose. Only the service role can touch them.

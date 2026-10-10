@@ -1,6 +1,11 @@
 # PROGRESS
 
-## Status (2026-10-07)
+## Status (2026-10-10)
+- DATABASE MOVED TO NEON. Project `aangan-enquiry-agent` (id `bold-bar-64838202`, Singapore, Postgres 17, database `aangan`, role `aangan_owner`). Schema and 4 placeholder designers applied; verified through the real app path (`npm run db:check`: connects, 8 tables, 4 designers, write+delete ok). `DATABASE_URL` is in `.env.local` only. Migrations now live in `db/migrations/0001_init.sql` and `db/seed.sql` (folder `supabase/` removed).
+- Aangan tables dropped from the shared Supabase project (they held only the 4 seeded designers). Two Tickets tables untouched (verified). Supabase variables removed from this project's env.
+- Row level security is on for all 8 tables with no policies (deny for any non-owner role). The Supabase `auth.uid()` designer policies are gone: the Next.js backend connects as the owner and scopes designers to their own leads in code (Milestone 7). `designers.auth_user_id` is now text.
+- The schema was applied through the Neon connector in one transaction; there is no migration runner yet. Add one (`db:migrate`) when the Next.js app lands.
+
 - Milestone 1 (Foundation): DONE. Migrations apply cleanly.
 - Milestone 2 (Context bundle and knowledge loader): DONE. 21 tests in `tests/context-bundle.test.ts`, all pass. Includes the acceptance test (edit a knowledge file, next call reflects it). `npm test` = 29 pass, 1 skipped placeholder. `npm run typecheck` clean.
 - Pre-M3 fallback: DONE. If call context fails to build, caller hears the polite callback message and a failed-call record with `callback_due_at` (now + 60 min) is written to the callback list. `src/lib/call-start.ts`, 7 tests.
@@ -9,7 +14,7 @@
 - Vercel: no Vercel token or API URL was found in any `.env` file (the `.env.local` and `.env.vercel` in ~/Downloads belong to another app). The Vercel connector in this session can deploy when Milestone 7 needs it.
 - GitHub: private repo https://github.com/alankratishinde-svg/aangan-enquiry-agent (pushed).
 - `.env.local` created (gitignored) with Vaani key, plus Gemini key and Supabase URL/service key copied from the Two Tickets project at user request.
-- Supabase: user chose to reuse project `nygjjubcosuregacjacm` (mesa-ai-track, ap-south-1, shared with Two Tickets). Migration `aangan_init` APPLIED on 2026-10-07 via MCP, plus the 4 placeholder designers. Verified: 8 Aangan tables, RLS on for all 8, 4 designers. No name collisions. Aangan tables share a DB with another app: consider moving to a dedicated project before real customer data arrives.
+- (Superseded 2026-10-10: database moved to Neon, see below.) Supabase: user chose to reuse project `nygjjubcosuregacjacm` (mesa-ai-track, ap-south-1, shared with Two Tickets). Migration `aangan_init` APPLIED on 2026-10-07 via MCP, plus the 4 placeholder designers. Verified: 8 Aangan tables, RLS on for all 8, 4 designers. No name collisions. Aangan tables share a DB with another app: consider moving to a dedicated project before real customer data arrives.
 - Security advisor: Aangan tables only trigger INFO 'RLS enabled, no policy' (intended: service role only). Separate from Aangan: 5 Two Tickets tables (groups, members, constraints, listings, reactions) have RLS OFF, flagged ERROR by Supabase. Not touched. Remediation SQL: `alter table public.<t> enable row level security;` for each, but it blocks anon access, so Two Tickets code may need policies first.
 - `SUPABASE_ANON_KEY` set to the project's publishable key.
 

@@ -23,7 +23,7 @@ Pune interior design studio (14 designers, 2 front desk). Scope: phone calls onl
 6. Never invent facts about Aangan. If the files do not answer, say the designer will cover it at the consultation.
 
 ## Stack (ask before swapping)
-Vaani Labs (voice, telephony, orchestration) · Gemini Flash (classify, summaries, tips, weekly summary, rubric drafts) · Google Calendar (slots, booking) · Resend (designer email) · Supabase Postgres (source of truth) · Next.js on Vercel (dashboards, API routes) · HubSpot (CRM for Nikhil) · Claude Code + GitHub.
+Vaani Labs (voice, telephony, orchestration) · Gemini Flash (classify, summaries, tips, weekly summary, rubric drafts) · Google Calendar (slots, booking) · Resend (designer email) · Neon Postgres (source of truth; moved from Supabase on 2026-10-10) · Next.js on Vercel (dashboards, API routes) · HubSpot (CRM for Nikhil) · Claude Code + GitHub.
 
 ## Qualification rule engine (code decides, not Gemini)
 Gemini returns per-criterion status JSON. Code applies:

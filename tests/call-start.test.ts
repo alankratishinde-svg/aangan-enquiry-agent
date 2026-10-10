@@ -98,7 +98,7 @@ describe("startCall fallback", () => {
     await start();
     const rec: FailedCallRecord = store.failed[0]!;
     const db = new PGlite();
-    await db.exec(readFileSync(join(root, "supabase", "migrations", "20261007000000_init.sql"), "utf8").replace(/create policy[\s\S]*?;\n/g, "").replace(/alter table .* enable row level security;/g, ""));
+    await db.exec(readFileSync(join(root, "db", "migrations", "0001_init.sql"), "utf8"));
     await db.query(
       `insert into calls (vaani_call_id, started_at, caller_number, status, failure_reason, is_after_hours, callback_due_at)
        values ($1, $2, $3, $4, $5, $6, $7)`,
