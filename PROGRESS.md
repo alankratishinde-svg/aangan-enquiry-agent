@@ -1,5 +1,45 @@
 # PROGRESS
 
+## CURRENT STATUS (end of session, 2026-10-10)
+Production: https://aangan-enquiry-agent-henna.vercel.app (Vercel project `aangan-enquiry-agent`, region sin1, built from GitHub `main`). Neon DB `aangan`. Voice agent in Vaani (id in `VAANI_AGENT_ID`). Stack-only (hard rule): Vaani, Gemini Flash, Cal.com, Resend, HubSpot, Neon, Vercel, GitHub.
+
+### Done and verified
+- M1 Foundation. M2 knowledge loader (kept for prompt sync and classification). M3 classification, 42/42 live cases.
+- M4 Vaani: agent created and its prompt synced from the knowledge files (`npm run vaani:sync`); webhook route `POST /api/vaani/webhook?token=...` live on Vercel. Auth: Vaani documents none for call events, so: URL token (fail closed, constant time) + the body is never trusted: the call is re-read from Vaani with our API key (`GET /api/call_details/{id}`; real Vaani answers 404 for an unknown id, tested live). Replies 200 fast, processes after the reply, stores every raw body first (`webhook_events`), daily sweep replays failures.
+- M5 Booking: Cal.com 45 min event type `aangan-consultation` (id 7422070, Mon to Sat 10:00 to 19:00 IST). Vaani's own Cal.com tools book during the call; after the call we find the booking by the caller's email and store it. Designers are assigned round robin by fewest open leads (placeholder: one calendar for all).
+- M6 Post-call: transcript read by Gemini, same rule engine, price check, booking-before-qualified check, one DB transaction, then per qualified lead: booking lookup, designer, internal estimate parsed from `pricing.md` (labelled, or "See pricing.md"), summary plus exactly 2 add-on tips (Gemini prompt `lead_summary.v1`), checklist from what the caller asked for, HubSpot deal (qualified only), designer email (Resend). Each step records its own error and is safe to repeat.
+- M7 Dashboards (Next.js on Vercel): `/designer` (own leads only, progress meter, tick items), `/frontdesk` (delete or convert, compliance flags with transcript), `/frontdesk/callbacks`, `/nikhil` (metrics, weekly summary, rubric proposals). Checked in a real browser, desktop and phone width, with demo data (since removed).
+- M8 Fallback and metrics: failed calls go on the callback list with `callback_due_at` = call end + 60 min; page shows overdue; metrics: answered under 5 min, failed called back within the hour (share, median minutes, overdue), price flags, booking flags, converted/deleted.
+- M9 Weekly job `/api/cron/weekly` (Mondays): numbers, Gemini written improvement summary (prompt `weekly_summary.v1`), and a DRAFT rubric change (prompt `rubric_proposal.v1`) only when the front desk converted at least 2 unqualified leads; guarded (keeps structure, no new money figure). Approval screen for Nikhil. Approved changes are applied by `npm run rubric:apply` (writes `knowledge/qualified.md`, re-syncs Vaani); Vercel cannot write files, so this step is run by a developer, then commit.
+- M10 End to end: `npm run eval:e2e`, 14/14 PASS with live Gemini (qualified, unqualified, failed, price question clean, price question where the agent names a price). Also `eval:classify` 42/42, `eval:postcall` 9/9, `eval:price` 6/6. 161 unit tests.
+
+### Pending, needs the user
+1. Vercel Deployment Protection: the production URL answered 200 to the public at the time of testing, so the webhook is reachable. If Vercel Authentication is enabled for the project it would block Vaani and designers: check Settings, Deployment Protection (I do not change security settings).
+2. Register the webhook in Vaani (Settings, Webhooks): `https://aangan-enquiry-agent-henna.vercel.app/api/vaani/webhook?token=<VAANI_WEBHOOK_TOKEN from .env.local>`. No Vaani API exists for this.
+3. In the Vaani dashboard attach the Cal.com tools to the agent, confirm the Cal.com key and event type `aangan-consultation` in Integrations.
+4. HubSpot: approve creation of the pipeline "Aangan Enquiries" and 7 deal properties (the connector asks for approval), and give a private app token as `HUBSPOT_ACCESS_TOKEN` (add to Vercel env too). Until then deals are skipped with `not_configured`, calls are still saved.
+5. Resend: `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (add to Vercel env too). Until then designer emails are skipped; the lead still shows on the dashboard.
+6. Designer sign-in links: `npm run designers:links` writes `.designer-links.txt` (gitignored) with one link per designer. Send them. Real designer names, emails and calendars replace the 4 placeholders (update the `designers` table).
+7. Change the production passwords (`FRONT_DESK_PASSWORD`, `NIKHIL_PASSWORD`) and rotate every key that was pasted in chat before real calls (Vaani, Cal.com, Gemini, Neon password). They are set in Vercel as sensitive env vars.
+8. Web test calls (docs/web-test-plan.md): normal, price question, Hindi. Then a phone number in Vaani Telephony. Marathi: UNVERIFIED.
+9. Nikhil confirmations (listed below), approved Hindi/Marathi deflection wording.
+10. `/enquiries/` transcripts for the replay test (placeholder test exists).
+
+### Known limits (honest)
+- No in-call enforcement: no-price and no-early-booking rely on the agent prompt; the post-call check flags what slips through. Hindi recognition and Marathi are untested.
+- The caller's phone number is not in the documented `call_postprocessing` payload; we use it if Vaani sends it, else the number the caller says. Check with a real call.
+- Booking lookup matches by the email the caller gave. A mis-heard email means "No Cal.com booking found" appears as a note and the designer is told to arrange a time.
+- One Cal.com calendar for all designers; assignment is round robin, not by availability.
+- HubSpot, Resend and the Vaani webhook delivery are only tested against mocks and the documented shapes, not live.
+- Cron jobs run daily and weekly (Vercel Hobby limit); the callback list is a page, not a push alert.
+- `response_seconds` is stored as 0 when the agent greeted (Vaani answers at once); ring time is not in the payload.
+
+### Commands
+`npm test` · `npm run typecheck` · `npm run dev` · `npm run vaani:sync` (after any change to knowledge/*.md) · `npm run calcom:setup` · `npm run designers:links` · `npm run rubric:apply` · `npm run demo:seed` / `demo:clean` · `npm run check:transcript -- file.txt` · `npm run eval:classify|postcall|price|e2e` · `npm run db:check`.
+
+---
+(Older notes below, newest context first is above.)
+
 ## Status (2026-10-10)
 - DATABASE MOVED TO NEON. Project `aangan-enquiry-agent` (id `bold-bar-64838202`, Singapore, Postgres 17, database `aangan`, role `aangan_owner`). Schema and 4 placeholder designers applied; verified through the real app path (`npm run db:check`: connects, 8 tables, 4 designers, write+delete ok). `DATABASE_URL` is in `.env.local` only. Migrations now live in `db/migrations/0001_init.sql` and `db/seed.sql` (folder `supabase/` removed).
 - Aangan tables dropped from the shared Supabase project (they held only the 4 seeded designers). Two Tickets tables untouched (verified). Supabase variables removed from this project's env.
@@ -140,16 +180,7 @@ Other gaps: no calendar tool in Vaani except a Cal.com integration (brief says G
 - Brief says Google Calendar, Cal.com only if asked. Decision pending: is Cal.com now the booking tool? One Cal.com user = one calendar, but the brief has 4 designers with separate calendars (needs a Cal.com team with round-robin, or 4 accounts/keys). Vaani also has a native Cal.com integration, but with BYOL our own server would book through the API.
 
 ## Milestones
-1. Foundation [x]
-2. Context bundle and knowledge loader [ ]
-3. Classification (`classify_lead`, Gemini prompt a, rule engine, 14 test cases) [ ]
-4. Vaani integration (adapter + mock + real verification) [ ]
-5. Booking [ ]
-6. Post-call (webhook, Resend, HubSpot) [ ]
-7. Dashboards [ ]
-8. Fallback and metrics [ ]
-9. Nikhil summary and rubric loop [ ]
-10. End-to-end [ ]
+1 Foundation [x] · 2 Knowledge loader [x] · 3 Classification [x] · 4 Vaani integration [x built, webhook registration and Cal.com tool attach pending (user)] · 5 Booking [x via Vaani Cal.com tools plus post-call lookup] · 6 Post-call [x, HubSpot and Resend need credentials] · 7 Dashboards [x] · 8 Fallback and metrics [x] · 9 Nikhil summary and rubric loop [x] · 10 End to end [x]
 
 ## Missing inputs
 - `/enquiries/` folder (40 anonymised transcripts). User will add later. Replay test skipped.

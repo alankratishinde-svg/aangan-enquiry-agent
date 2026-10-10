@@ -20,7 +20,8 @@
     "designers:links": "tsx scripts/designer-tokens.ts",
     "rubric:apply": "tsx scripts/apply-rubric.ts",
     "demo:seed": "tsx scripts/demo-data.ts",
-    "demo:clean": "tsx scripts/demo-data.ts --clean"
+    "demo:clean": "tsx scripts/demo-data.ts --clean",
+    "eval:e2e": "tsx scripts/eval-e2e.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",
