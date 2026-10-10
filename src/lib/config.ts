@@ -7,6 +7,20 @@ export interface Config {
   bookableDays: number[];
   bookingLeadMinutes: number;
   officeTz: string;
+  /** any_clear_fail: one clear fail on criteria 1 to 4 means unqualified. two_or_more: needs two clear fails. */
+  failPolicy: "any_clear_fail" | "two_or_more";
+  /** Weeks needed before the project must be ready. Below this is a clear fail. */
+  timelineFailUnderWeeks: number;
+  /** At or above this passes. Between the two is unclear. */
+  timelinePassFromWeeks: number;
+  /** Approximate commercial size limit from services.md. */
+  commercialMaxSqFt: number;
+  /** Percent band around the limit that counts as borderline (unclear). */
+  commercialBorderPct: number;
+  /** What to do when criteria 1 to 3 are still unclear after the one allowed re-run. */
+  unclearAfterRetry: "unqualified" | "qualified";
+  /** Hours until a failed call must be called back. */
+  callbackTargetMinutes: number;
 }
 
 const DAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -17,6 +31,13 @@ function int(env: Record<string, string | undefined>, key: string, fallback: num
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) throw new Error(`${key} must be a non-negative integer, got "${raw}"`);
   return n;
+}
+
+function oneOf<T extends string>(env: Record<string, string | undefined>, key: string, allowed: readonly T[], fallback: T): T {
+  const raw = env[key];
+  if (raw === undefined || raw === "") return fallback;
+  if (!(allowed as readonly string[]).includes(raw)) throw new Error(`${key} must be one of ${allowed.join(", ")}, got "${raw}"`);
+  return raw as T;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -34,7 +55,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     bookableDays,
     bookingLeadMinutes: int(env, "BOOKING_LEAD_MINUTES", 120),
     officeTz: env.OFFICE_TZ || "Asia/Kolkata",
+    failPolicy: oneOf(env, "QUALIFY_FAIL_POLICY", ["any_clear_fail", "two_or_more"], "any_clear_fail"),
+    timelineFailUnderWeeks: int(env, "TIMELINE_FAIL_UNDER_WEEKS", 6),
+    timelinePassFromWeeks: int(env, "TIMELINE_PASS_FROM_WEEKS", 10),
+    commercialMaxSqFt: int(env, "COMMERCIAL_MAX_SQFT", 3000),
+    commercialBorderPct: int(env, "COMMERCIAL_BORDER_PCT", 10),
+    unclearAfterRetry: oneOf(env, "UNCLEAR_AFTER_RETRY", ["unqualified", "qualified"], "unqualified"),
+    callbackTargetMinutes: int(env, "CALLBACK_TARGET_MINUTES", 60),
   };
+  if (cfg.timelineFailUnderWeeks > cfg.timelinePassFromWeeks) {
+    throw new Error("TIMELINE_FAIL_UNDER_WEEKS must not exceed TIMELINE_PASS_FROM_WEEKS");
+  }
   if (cfg.officeTz !== "Asia/Kolkata") {
     // Slot maths uses a fixed +05:30 offset (India has no DST). Other zones need a real tz library.
     throw new Error(`OFFICE_TZ "${cfg.officeTz}" is not supported yet. Only Asia/Kolkata.`);

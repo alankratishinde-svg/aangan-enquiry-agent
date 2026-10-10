@@ -3,7 +3,10 @@
 ## Status (2026-10-07)
 - Milestone 1 (Foundation): DONE. Migrations apply cleanly.
 - Milestone 2 (Context bundle and knowledge loader): DONE. 21 tests in `tests/context-bundle.test.ts`, all pass. Includes the acceptance test (edit a knowledge file, next call reflects it). `npm test` = 29 pass, 1 skipped placeholder. `npm run typecheck` clean.
-- Next: Milestone 3 (classification). Needs Gemini (key present). Milestone 4 blocked on the BYOL hosting decision.
+- Pre-M3 fallback: DONE. If call context fails to build, caller hears the polite callback message and a failed-call record with `callback_due_at` (now + 60 min) is written to the callback list. `src/lib/call-start.ts`, 7 tests.
+- Milestone 3 (Classification): DONE. `classify_lead` + Gemini prompt (a) + rule engine. Live eval against real Gemini: 42/42 PASS (`npm run eval:classify`, report in `docs/eval/classification-latest.md`). Agent price check: 6/6 PASS (`npm run eval:price`, `docs/eval/agent-price-latest.md`). Unit tests: `npm test` (mock Gemini, no network).
+- Next: Milestone 4 (Vaani integration), blocked on the BYOL hosting decision (Fly.io recommended). Milestone 5 (booking) needs the Google service account.
+- Vercel: no Vercel token or API URL was found in any `.env` file (the `.env.local` and `.env.vercel` in ~/Downloads belong to another app). The Vercel connector in this session can deploy when Milestone 7 needs it.
 - GitHub: private repo https://github.com/alankratishinde-svg/aangan-enquiry-agent (pushed).
 - `.env.local` created (gitignored) with Vaani key, plus Gemini key and Supabase URL/service key copied from the Two Tickets project at user request.
 - Supabase: user chose to reuse project `nygjjubcosuregacjacm` (mesa-ai-track, ap-south-1, shared with Two Tickets). Migration `aangan_init` APPLIED on 2026-10-07 via MCP, plus the 4 placeholder designers. Verified: 8 Aangan tables, RLS on for all 8, 4 designers. No name collisions. Aangan tables share a DB with another app: consider moving to a dedicated project before real customer data arrives.
@@ -31,6 +34,22 @@
 - Added `BOOKING_LEAD_MINUTES` (default 120): no slot starts sooner than that after the call. Not in the brief.
 - Deflection language: exact text is English. For Hindi or Marathi callers the agent says it in English as written. Translating would change the approved wording. Ask Nikhil whether an approved Hindi/Marathi version is wanted.
 - Offered slots: next 8 distinct start times, one designer per time (first in list). Fair rotation is Milestone 5.
+
+## Milestone 3 delivered (`src/lib/classify/`, `src/lib/gemini.ts`, `prompts/classify_lead.v1.md`)
+- `classifyLead(callId, answers, deps)`: Gemini judges each criterion, `applyRules` (pure code) decides the verdict. Gemini's own `verdict` is stored as `gemini_verdict` for disagreement tracking only.
+- Question limits: round 1 may ask one question per unclear criterion among 1 to 3 (never budget or decision-maker). Each criterion is asked at most once. Round 2 (the one re-run) never asks. A third call returns the stored result without calling Gemini. State is per call (`ClassifyStateStore`, in-memory for now).
+- Rule overrides of Gemini: `weeks_until_needed` sets the timeline status from config (under 6 fail, 6 to under 10 unclear, 10+ pass; `timeline_firm` false passes, true fails). Commercial area: up to 3,000 pass, 3,001 to 3,300 one question, over 3,300 fail. Thresholds are config (`COMMERCIAL_MAX_SQFT`, `COMMERCIAL_BORDER_PCT`) because services.md says "approximately 3,000" in prose.
+- Out-of-scope types (restaurant, hotel, retail, gym, structural work, decor only, furniture only, Vastu only) are judged by Gemini from `services.md`, not hardcoded. All 8 live cases passed.
+- No price in any output: spoken fields (questions, decline reason) fall back to fixed safe text if a price appears; money figures are redacted from evidence and handoff notes. The caller's own budget figure lives only in `answers`. Tool response (`toToolResponse`) has no evidence or internals.
+- Gemini: REST `generateContent`, `x-goog-api-key`, model `gemini-flash-latest` (resolved to gemini-3.8-flash on 2026-10-10), `thinkingLevel: low` for about 4 s per classification (default thinking was slower). `pricing.md` is never sent to Gemini.
+- Agent instructions updated: "ask each question the tool returns, then call classify_lead once more".
+
+### Decisions in Milestone 3 to confirm with Nikhil
+1. Criterion 5 (decision-maker) never disqualifies alone, even if clearly failing: it becomes a handoff note. Matches "unclear 4 or 5: do not push".
+2. Still unclear on criteria 1 to 3 after the one question: default is `unqualified` (goes to the front desk review queue, reversible). Flag `UNCLEAR_AFTER_RETRY=qualified` sends it to a designer with a note instead. Which does Nikhil prefer?
+3. Budget "clearly too low" (criterion 4) is Gemini's judgement from the rubric example only. It does not see pricing.md. A code check against pricing.md floors is possible later if Nikhil wants it stricter.
+4. 6 to 10 weeks is asked as "Is that finish date fixed, or could it be a little later if needed?" Flexible passes, fixed fails.
+5. Caller whose timing, area or location stays vague after one question gets the graceful close, with an honest sentence that details could not be confirmed.
 
 ## Schema additions beyond the brief (confirm ok)
 - `calls.callback_due_at`, `calls.called_back_at`: needed for the 1-hour callback metric (section 9).
