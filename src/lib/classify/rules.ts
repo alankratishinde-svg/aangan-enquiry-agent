@@ -148,7 +148,7 @@ export function applyRules(input: RuleInput): ClassificationResult {
   }
   if (criteria.decision_maker.status === "unclear") notes.push(`Decision-maker unclear: ${criteria.decision_maker.evidence}`);
   if (criteria.budget_band.status === "unclear") notes.push(`Budget unclear: ${criteria.budget_band.evidence}`);
-  for (const c of exhausted) notes.push(`Could not confirm ${c.replace("_", " ")} after one question: ${criteria[c].evidence}`);
+  for (const c of exhausted) notes.push(`Could not confirm ${c.replace("_", " ")} with the answers available: ${criteria[c].evidence}`);
 
   // Decline reason and close script for unqualified.
   let decline: string | null = null;

@@ -43,6 +43,14 @@ describe("native agent prompt", () => {
     expect(p).toMatch(/up to about 2000 square feet/);
   });
 
+  it("names the Cal.com tools, locks them until the lead is a fit, and ends with a price self-check", () => {
+    for (const t of ["Check_availability_booking", "book_appointment", "cancel_appointment", "reschedule_appointment"]) expect(prompt).toContain(t);
+    expect(prompt).toMatch(/Only now are you allowed to use the booking tools/);
+    expect(prompt).toMatch(/Booking tools are locked until the caller is a fit/);
+    expect(prompt.indexOf("Final check before every reply")).toBeGreaterThan(prompt.indexOf("Booking tools are locked"));
+    expect(prompt).toMatch(/in digits or in words/);
+  });
+
   it("uses the graceful close from qualified.md", () => {
     expect(prompt).toContain("This sounds like it may not be the right fit for us right now");
   });

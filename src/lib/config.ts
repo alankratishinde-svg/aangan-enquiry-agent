@@ -21,6 +21,8 @@ export interface Config {
   unclearAfterRetry: "unqualified" | "qualified";
   /** Hours until a failed call must be called back. */
   callbackTargetMinutes: number;
+  /** Offices up to this size are labelled "small office", above it "large office". */
+  smallOfficeMaxSqFt: number;
 }
 
 const DAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -62,6 +64,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     commercialBorderPct: int(env, "COMMERCIAL_BORDER_PCT", 10),
     unclearAfterRetry: oneOf(env, "UNCLEAR_AFTER_RETRY", ["unqualified", "qualified"], "unqualified"),
     callbackTargetMinutes: int(env, "CALLBACK_TARGET_MINUTES", 60),
+    smallOfficeMaxSqFt: int(env, "SMALL_OFFICE_MAX_SQFT", 1500),
   };
   if (cfg.timelineFailUnderWeeks > cfg.timelinePassFromWeeks) {
     throw new Error("TIMELINE_FAIL_UNDER_WEEKS must not exceed TIMELINE_PASS_FROM_WEEKS");

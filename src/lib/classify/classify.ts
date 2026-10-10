@@ -46,6 +46,8 @@ export interface ClassifyDeps {
   store: ClassifyStateStore;
   now?: () => Date;
   promptsDir?: string;
+  /** Post-call audit mode: nobody can answer a question any more, so run as the last round. */
+  finalRound?: boolean;
 }
 
 const MAX_ROUNDS = 2;
@@ -89,7 +91,7 @@ export async function classifyLead(callId: string, rawAnswers: unknown, deps: Cl
     throw new ClassifyError(`classify_lead answers are invalid: ${(err as Error).message}`, { cause: err });
   }
 
-  const round = (state?.round ?? 0) + 1;
+  const round = deps.finalRound ? MAX_ROUNDS : (state?.round ?? 0) + 1;
   const asked = state?.asked ?? [];
   const prompt = await loadPrompt(deps.promptsDir ?? join(import.meta.dirname, "..", "..", "..", "prompts"));
   const today = (deps.now ?? (() => new Date()))();
