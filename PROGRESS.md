@@ -101,6 +101,11 @@ Other gaps: no calendar tool in Vaani except a Cal.com integration (brief says G
 3. Timeline conflict: `qualified.md` says 8 to 10 weeks; `services.md` says 6 week minimum. Default (flags `TIMELINE_FAIL_UNDER_WEEKS=6`, `TIMELINE_PASS_FROM_WEEKS=10`): under 6 = fail; 6 to 10 = unclear, ask one question; 10+ = pass.
 4. Rubric learning loop: approval step stays on (user decision). Nikhil approves.
 
+## Vaani native agent (2026-10-10, stack-only plan confirmed by user)
+- Built: `src/lib/vaani/client.ts` (REST adapter + `MockVaaniClient`), `src/lib/vaani/agent-prompt.ts` (agent prompt from the live knowledge files, thresholds from config, rate tables withheld, no braces), `scripts/sync-vaani-agent.ts` (`npm run vaani:sync`, `-- --dry-run` writes `docs/vaani-agent-prompt.md` only). 14 new tests, `npm test` = 87 pass.
+- BLOCKED: creating the agent returned `401 Invalid API key`. The same key returned 200 on `GET /api/agents` earlier today, and now every endpoint returns 401, so the key was revoked or rotated. Need a fresh key (Vaani dashboard, Settings, API Keys) put into `.env.local` as `VAANI_API_KEY`. No agent was created. Then run `npm run vaani:sync`; it saves `VAANI_AGENT_ID` to `.env.local`.
+- After any change to `knowledge/*.md`, re-run `npm run vaani:sync` (native agents cannot load files per call).
+
 ## Cal.com (2026-10-10)
 - `CALCOM_API_KEY` saved in `.env.local` (gitignored). Verified read-only: `GET https://api.cal.com/v2/me` returns 200 (Bearer auth), account timezone Asia/Kolkata, one user. Event types found: 30min, 15min, secret (15). No 45-minute type yet.
 - Brief says Google Calendar, Cal.com only if asked. Decision pending: is Cal.com now the booking tool? One Cal.com user = one calendar, but the brief has 4 designers with separate calendars (needs a Cal.com team with round-robin, or 4 accounts/keys). Vaani also has a native Cal.com integration, but with BYOL our own server would book through the API.
