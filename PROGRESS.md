@@ -28,6 +28,12 @@ Production: https://aangan-enquiry-agent-henna.vercel.app (Vercel project `aanga
 ### Cost page setup
 Set on Vercel (and `.env.local`): `COST_PER_CALL_INR`, `INDICATIVE_CONVERSION_PCT` (blank today: the page says "not set", nothing is guessed), `INDICATIVE_PROJECT_VALUE_LOW_INR` / `_HIGH_INR` (8 and 14 lakh from the brief), `HUBSPOT_PORTAL_ID` (for the deals link).
 
+### If a Vaani call does not show on the dashboard (found 2026-10-10)
+- Cause that day: the webhook was never registered in Vaani (agent config `webhook` is null; the Neon `webhook_events` table held only our own 4 test rows). Register `https://aangan-enquiry-agent-henna.vercel.app/api/vaani/webhook?token=<VAANI_WEBHOOK_TOKEN>` in Vaani, Settings, Webhooks. A request with a wrong or missing token gets 401 and is not logged.
+- Backfill a call that already happened: `npm run vaani:ingest -- <call_id>` (call id from Vaani, Conversations, History). It uses the same verified path as the webhook.
+- Vaani's `GET /api/call-history` returns 500 "Invalid client_id format" for this account (a Vaani backend error, checked with the key), so calls cannot be listed through the API; the id has to come from the dashboard.
+- Vercel runtime logs are not readable from this session (403).
+
 ### Known limits (honest)
 - No in-call enforcement: no-price and no-early-booking rely on the agent prompt; the post-call check flags what slips through. Hindi recognition and Marathi are untested.
 - The caller's phone number is not in the documented `call_postprocessing` payload; we use it if Vaani sends it, else the number the caller says. Check with a real call.
