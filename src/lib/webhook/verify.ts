@@ -11,6 +11,29 @@ export function tokenOk(given: string | null | undefined, expected: string | und
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+export interface VaaniEventBody {
+  event: string;
+  call_id?: unknown;
+  timestamp?: unknown;
+  data?: unknown;
+  [k: string]: unknown;
+}
+
+/**
+ * Vaani may deliver one event per request, or a batch envelope: { event, events: [ { event, call_id, data, timestamp }, ... ] }
+ * (seen in Vaani's own "send test" delivery, 2026-10-10). Both are flattened into a list of single events.
+ */
+export function extractEvents(body: unknown): VaaniEventBody[] {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return [];
+  const b = body as Record<string, unknown>;
+  if (Array.isArray(b.events)) {
+    return b.events
+      .filter((e): e is Record<string, unknown> => !!e && typeof e === "object" && !Array.isArray(e))
+      .map((e) => ({ ...e, event: typeof e.event === "string" ? e.event : "unknown", timestamp: e.timestamp ?? b.timestamp }));
+  }
+  return [{ ...b, event: typeof b.event === "string" ? b.event : "unknown" }];
+}
+
 export type VerifyOutcome =
   | { ok: true; kind: "call"; callId: string; record: CallRecord }
   | { ok: true; kind: "ignored"; event: string }
@@ -59,7 +82,10 @@ export async function verifyWithVaani(body: unknown, vaani: VaaniClient, now: Da
   const ts = typeof b.timestamp === "string" ? new Date(b.timestamp) : null;
   const plausible = ts && !Number.isNaN(ts.getTime()) && ts.getTime() <= now.getTime() + 5 * 60_000 && ts.getTime() >= now.getTime() - 7 * 86_400_000;
   const endedAt = plausible ? ts! : now;
-  const rawMs = typeof data.call_duration === "number" ? data.call_duration : 0;
+  // Documented as milliseconds for call_postprocessing, but Vaani's test delivery sent 120 for a two minute call.
+  // No real call lasts under a second, so a value under 1000 is seconds.
+  const rawDuration = typeof data.call_duration === "number" ? data.call_duration : 0;
+  const rawMs = rawDuration > 0 && rawDuration < 1000 ? rawDuration * 1000 : rawDuration;
   const durationMs = Math.min(Math.max(rawMs, 0), FOUR_HOURS);
   const pick = (...vals: unknown[]) => vals.find((v): v is string => typeof v === "string" && v.trim() !== "") ?? null;
   const record: CallRecord = {

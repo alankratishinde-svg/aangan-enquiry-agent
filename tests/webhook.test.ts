@@ -95,7 +95,7 @@ describe("verifying the call with Vaani", () => {
     expect(ended.ok && ended.kind).toBe("ignored");
   });
   it("non call_postprocessing events are accepted and ignored; junk bodies are 400", async () => {
-    expect((await run(TOKEN, { event: "call_started", room_name: "r" })).json).toMatchObject({ status: "ignored" });
+    expect((await run(TOKEN, { event: "call_started", room_name: "r" })).json).toMatchObject({ status: "ignored", events: 1 });
     expect((await run(TOKEN, "nope")).status).toBe(400);
     expect((await run(TOKEN, body({ call_id: undefined, data: {} }))).status).toBe(400);
   });
@@ -105,7 +105,7 @@ describe("accepted webhook", () => {
   it("answers 200 first; the work runs afterwards and marks the stored event processed", async () => {
     const r = await run(TOKEN, body());
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ status: "accepted", call_id: "inbound-1" });
+    expect(r.json).toMatchObject({ status: "accepted", call_ids: ["inbound-1"] });
     expect(await q("select * from calls")).toHaveLength(0); // nothing processed yet: the reply came first
     await r.after!();
     const [ev] = await q<{ state: string }>("select state from webhook_events");
@@ -118,5 +118,64 @@ describe("accepted webhook", () => {
     await (await run(TOKEN, body())).after!();
     await (await run(TOKEN, body())).after!();
     expect(await q("select * from calls")).toHaveLength(1);
+  });
+});
+
+// The exact envelope Vaani's "send test" button delivered to production on 2026-10-10.
+const VAANI_TEST_DELIVERY = {
+  event: "webhook_test",
+  events: [
+    { data: { call_id: "test_room_123", summary: "This is a sample summary for testing.", entities: { intent: "inquiry", customer_name: "John Doe" }, room_name: "test_room_123", end_reason: "completed", transcript: "Agent: Hello\nUser: Hi", dispositions: { "CATALOG ID": "44", call_disposition: "Interested" }, call_duration: 120, recording_url: "https://example.com/recording.mp3" }, event: "call_postprocessing", call_id: "test_room_123", timestamp: "2026-10-10T12:19:00.005377+00:00" },
+    { data: { reason: "INTERNAL_ERROR", call_id: "test_room_123", room_name: "test_room_123", phone_number: "+919876543210" }, event: "call_failed", timestamp: "2026-10-10T12:19:00.005427+00:00" },
+  ],
+  timestamp: "2026-10-10T12:19:00.005435+00:00",
+};
+
+describe("Vaani batch envelope (real delivery shape)", () => {
+  it("the send-test delivery is acknowledged with 200 and processes nothing", async () => {
+    const r = await run(TOKEN, VAANI_TEST_DELIVERY);
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ status: "test_received" });
+    expect(r.after).toBeUndefined();
+    expect(await q("select * from calls")).toHaveLength(0);
+    expect((await q<{ state: string }>("select state from webhook_events"))[0]!.state).toBe("ignored");
+  });
+
+  it("a batch with a real finished call inside is accepted and processed once", async () => {
+    const batch = { event: "call_batch", timestamp: "2026-10-12T04:36:00+00:00", events: [
+      { event: "call_postprocessing", call_id: "inbound-1", data: { call_id: "inbound-1", call_duration: 240 } },
+      { event: "call_ended", data: { call_id: "inbound-1", call_duration: 240 } },
+    ] };
+    const r = await run(TOKEN, batch);
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ status: "accepted", call_ids: ["inbound-1"] });
+    await r.after!();
+    expect(await q("select * from calls")).toHaveLength(1);
+  });
+
+  it("the same call twice in one batch is processed once", async () => {
+    const e = { event: "call_postprocessing", call_id: "inbound-1", data: { call_id: "inbound-1" } };
+    const r = await run(TOKEN, { events: [e, e] });
+    expect((r.json as { call_ids: string[] }).call_ids).toEqual(["inbound-1"]);
+  });
+
+  it("a batch naming only unknown calls is refused (403); a batch with a call Vaani is still processing asks for a retry (503)", async () => {
+    expect((await run(TOKEN, { events: [{ event: "call_postprocessing", call_id: "nope", data: { call_id: "nope" } }] })).status).toBe(403);
+    vaani.calls.set("busy", { status: "pending" });
+    const mixed = await run(TOKEN, { events: [{ event: "call_postprocessing", call_id: "inbound-1" }, { event: "call_postprocessing", call_id: "busy" }] });
+    expect(mixed.status).toBe(503);
+  });
+
+  it("an empty or junk envelope is a 400, and a batch of only non-final events is ignored", async () => {
+    expect((await run(TOKEN, { events: [] })).status).toBe(400);
+    expect((await run(TOKEN, { events: ["x", 5] })).status).toBe(400);
+    expect((await run(TOKEN, { events: [{ event: "call_started", room_name: "r" }] })).json).toMatchObject({ status: "ignored" });
+  });
+
+  it("a duration under 1000 is read as seconds (the test delivery sent 120 for two minutes)", async () => {
+    const v = await verifyWithVaani({ event: "call_postprocessing", call_id: "inbound-1", timestamp: "2026-10-12T04:36:00+00:00", data: { call_id: "inbound-1", call_duration: 120 } }, vaani, NOW);
+    if (!v.ok || v.kind !== "call") throw new Error("expected a call");
+    expect(v.record.durationSeconds).toBe(120);
+    expect(v.record.startedAt.toISOString()).toBe("2026-10-12T04:34:00.000Z");
   });
 });
