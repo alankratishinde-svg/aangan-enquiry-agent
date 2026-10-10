@@ -10,3 +10,8 @@ coverage/
 supabase/.temp/
 supabase/.branches/
 enquiries/
+
+next-env.d.ts
+*.tsbuildinfo
+.designer-links.txt
+.vercel

@@ -11,3 +11,4 @@ alter table review_queue add constraint review_queue_state_check
   check (state in ('pending', 'deleted', 'converted', 'reviewed'));
 
 alter table rubric_proposals add column applied_at timestamptz;
+alter table rubric_proposals add column proposed_text text;

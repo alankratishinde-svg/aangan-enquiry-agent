@@ -13,18 +13,30 @@
     "vaani:sync": "tsx scripts/sync-vaani-agent.ts",
     "calcom:setup": "tsx scripts/setup-calcom.ts",
     "eval:postcall": "tsx scripts/eval-postcall.ts",
-    "check:transcript": "tsx scripts/check-transcript.ts"
+    "check:transcript": "tsx scripts/check-transcript.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "designers:links": "tsx scripts/designer-tokens.ts",
+    "rubric:apply": "tsx scripts/apply-rubric.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",
+    "@types/diff": "^7.0.2",
     "@types/node": "^26.6.4",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "tsx": "^4.23.15",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "diff": "^9.0.0",
+    "next": "^16.4.0",
     "pg": "^8.23.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "zod": "^4.6.5"
   }
 }
