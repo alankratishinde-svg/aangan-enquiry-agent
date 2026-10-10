@@ -87,6 +87,13 @@ describe("verifying the call with Vaani", () => {
     expect(v.record.endedAt.toISOString()).toBe(NOW.toISOString());
     expect(v.record.durationSeconds).toBeLessThanOrEqual(4 * 3600);
   });
+  it("call.completed (the campaign webhook name) is treated like call_postprocessing", async () => {
+    const v = await verifyWithVaani({ event: "call.completed", call_id: "inbound-1", data: { call_id: "inbound-1" } }, vaani, NOW);
+    expect(v.ok && v.kind).toBe("call");
+    expect((await verifyWithVaani({ event: "call_ended", call_id: "inbound-1" }, vaani, NOW)).ok && true).toBe(true);
+    const ended = await verifyWithVaani({ event: "call_ended", call_id: "inbound-1" }, vaani, NOW);
+    expect(ended.ok && ended.kind).toBe("ignored");
+  });
   it("non call_postprocessing events are accepted and ignored; junk bodies are 400", async () => {
     expect((await run(TOKEN, { event: "call_started", room_name: "r" })).json).toMatchObject({ status: "ignored" });
     expect((await run(TOKEN, "nope")).status).toBe(400);

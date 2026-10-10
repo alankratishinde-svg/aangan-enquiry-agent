@@ -16,6 +16,13 @@ export type VerifyOutcome =
   | { ok: true; kind: "ignored"; event: string }
   | { ok: false; status: number; reason: string };
 
+/**
+ * End-of-call events that carry the finished call. `call_postprocessing` is documented for dashboard webhooks;
+ * `call.completed` is the name on the campaign webhooks page. The body is never trusted, so a second name is safe:
+ * either way we re-read the call from Vaani.
+ */
+const FINAL_EVENTS = new Set(["call_postprocessing", "call.completed", "call_completed"]);
+
 function callIdOf(body: Record<string, unknown>): string | null {
   const data = (typeof body.data === "object" && body.data ? body.data : {}) as Record<string, unknown>;
   for (const v of [data.call_id, body.call_id, data.room_name, body.room_name]) if (typeof v === "string" && v.trim()) return v.trim();
@@ -34,7 +41,7 @@ export async function verifyWithVaani(body: unknown, vaani: VaaniClient, now: Da
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, status: 400, reason: "Body is not a JSON object" };
   const b = body as Record<string, unknown>;
   const event = typeof b.event === "string" ? b.event : "";
-  if (event !== "call_postprocessing") return { ok: true, kind: "ignored", event: event || "unknown" };
+  if (!FINAL_EVENTS.has(event)) return { ok: true, kind: "ignored", event: event || "unknown" };
   const callId = callIdOf(b);
   if (!callId) return { ok: false, status: 400, reason: "No call id in the event" };
 
