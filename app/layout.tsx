@@ -1,23 +1,21 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Cormorant_Garamond, Poppins } from "next/font/google";
 import { openAccess } from "../src/server/session";
+import { TopBar } from "./_components/TopBar";
 import "./globals.css";
+
+const display = Cormorant_Garamond({ subsets: ["latin"], weight: ["300", "400", "500"], variable: "--font-display", display: "swap" });
+const ui = Poppins({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-ui", display: "swap" });
 
 export const metadata: Metadata = { title: "Aangan Studio", description: "Phone enquiries, leads and reviews for Aangan Studio" };
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${ui.variable}`}>
       <body>
-        <header className="top">
-          <Link href="/" className="brand"><strong>Aangan Studio</strong></Link>
-          <nav>
-            <Link href="/designer">Designer dashboard</Link>
-            <Link href="/nikhil">Nikhil dashboard</Link>
-          </nav>
-        </header>
-        {openAccess() && <div className="testbar" role="note">Test mode: no sign-in</div>}
+        <TopBar />
+        {openAccess() && <p className="testnote" role="note">Test mode: no sign-in</p>}
         <main>{children}</main>
       </body>
     </html>

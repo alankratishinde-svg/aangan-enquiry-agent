@@ -16,6 +16,7 @@ Use only what is said in the transcript. Do not guess. If something was not said
 - budget_volunteered_inr (number) and budget_text: ONLY if the caller volunteered a budget. Never infer one.
 - asked_about_price: true if the caller asked about price or cost.
 - is_rented, structural_changes: only if stated.
+Speech recognition garbles names and places (for example "Barnet" for "Baner"). When the AGENT repeats or confirms a place name, a person's name, an email or a phone number in a later turn and the caller does not correct it, use the AGENT's version for location_text and for the contact fields.
 "contact": name, email, phone, each only if the caller gave it. For email, rebuild it from spoken form (for example "john at gmail dot com" becomes john@gmail.com).
 
 "requested_items": a short checklist of what the CALLER asked for, one item per room, area or service, in the caller's words, at most 8, each under 8 words (for example "Living room redesign", "Modular kitchen", "Bedroom wardrobes"). Only things the caller asked for. Empty list if nothing specific was said.

@@ -51,6 +51,11 @@ describe("native agent prompt", () => {
     expect(prompt).toMatch(/in digits or in words/);
   });
 
+  it("makes the agent collect name, need, size, place, timing and decision-maker before contact details", () => {
+    expect(prompt).toMatch(/Before you ask for an email address or phone number you must know all of these/);
+    expect(prompt).toMatch(/Do not skip the size/);
+  });
+
   it("uses the graceful close from qualified.md", () => {
     expect(prompt).toContain("This sounds like it may not be the right fit for us right now");
   });

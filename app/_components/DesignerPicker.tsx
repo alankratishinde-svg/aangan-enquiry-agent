@@ -9,7 +9,7 @@ export function DesignerPicker({ designers, selectedId, locked }: { designers: {
   return (
     <form action={selectDesigner} className="picker">
       <input type="hidden" name="next" value={path.startsWith("/designer/calls/") ? "/designer/leads" : path} />
-      <label htmlFor="designer-select" className="label">Designer</label>
+      <label htmlFor="designer-select">Designer</label>
       <select id="designer-select" name="designer" defaultValue={selectedId ?? ""} disabled={locked} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
         {!selectedId && <option value="" disabled>Choose a designer</option>}
         {designers.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}

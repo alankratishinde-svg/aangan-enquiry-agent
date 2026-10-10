@@ -25,8 +25,17 @@ Production: https://aangan-enquiry-agent-henna.vercel.app (Vercel project `aanga
 9. Nikhil confirmations (listed below), approved Hindi/Marathi deflection wording.
 10. `/enquiries/` transcripts for the replay test (placeholder test exists).
 
+### Front-end look (2026-10-10)
+Palette after the Ardea reference the user gave: forest `#243029`, cream `#efebe3`, sand `#d9ccb4`, terracotta `#c4561c` (the one accent), teal and walnut. Type: Cormorant Garamond Light for display (lining numerals), Poppins for UI. Hero image `public/hero-lounge.jpg` was generated with Gemini (`gemini-2.5-flash-image`), original, no text. Floating cream top bar, frosted-glass bars for live counts and controls, one hero reveal (off for reduced motion).
+
 ### Cost page setup
 Set on Vercel (and `.env.local`): `COST_PER_CALL_INR`, `INDICATIVE_CONVERSION_PCT` (blank today: the page says "not set", nothing is guessed), `INDICATIVE_PROJECT_VALUE_LOW_INR` / `_HIGH_INR` (8 and 14 lakh from the brief), `HUBSPOT_PORTAL_ID` (for the deals link).
+
+### Synthetic test calls (2026-10-10, `npm run test:call -- qualified|price|unqualified|hindi`)
+- A synthetic caller joins a Vaani WebRTC session (macOS `say` voices, LiveKit client), talks to the real agent, and the call reaches the dashboard through the real production webhook. Real Vaani minutes are used.
+- Bugs found and fixed by the first calls: (1) Vaani separates transcript turns with ONE newline, my parser needed a blank line, so every real call was saved as "failed: no caller speech" (fixed in `parseTranscript`, regression tests use the captured real delivery); (2) `call_duration` arrives in seconds, not ms as documented: start and end now come from `call_started_at` / `call_ended_at`; (3) `phone_number: "web-user"` for web calls was stored as a number; (4) batch envelope `{event, events:[...]}` and the `webhook_test` ping are handled; (5) the agent skipped the size question and ASR turned "Baner" into "Barnet": agent prompt now lists what to collect before contact details, extraction prefers the agent's confirmed spelling.
+- Results: qualified call (agent greeting, name, location, timing, decision-maker, email and phone read back) lands as a qualified lead; price call: all three price questions got the exact approved sentence and no number, no price flag. The agent did NOT book: Cal.com tools are not attached to the agent yet (user step).
+- Not yet run live: unqualified and Hindi scenarios.
 
 ### If a Vaani call does not show on the dashboard (found 2026-10-10)
 - Cause that day: the webhook was never registered in Vaani (agent config `webhook` is null; the Neon `webhook_events` table held only our own 4 test rows). Register `https://aangan-enquiry-agent-henna.vercel.app/api/vaani/webhook?token=<VAANI_WEBHOOK_TOKEN>` in Vaani, Settings, Webhooks. A request with a wrong or missing token gets 401 and is not logged.

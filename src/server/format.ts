@@ -1,4 +1,6 @@
 export const pretty = (s: string | null | undefined) => (s ? s.replace(/_/g, " ") : "not given");
+/** First letter in capitals, for titles. */
+export const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 export function istDateTime(iso: string | null | undefined): string {
   if (!iso) return "not set";
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso)) + " IST";

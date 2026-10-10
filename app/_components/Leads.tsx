@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { toggleRequirement } from "../actions";
 import { safeText } from "../../src/lib/display";
-import { ago, istDateTime, pretty } from "../../src/server/format";
+import { ago, cap, istDateTime, pretty } from "../../src/server/format";
 import { leadsFor, progressPct } from "../../src/server/queries";
 import { db } from "../../src/server/runtime";
 
@@ -16,7 +16,7 @@ export async function Leads({ designerId, designerName, focus }: { designerId: s
         return (
           <article key={l.id} id={`lead-${l.id}`} className="card" style={focus === l.id ? { outline: "2px solid var(--accent)" } : undefined}>
             <div className="row">
-              <h3>{pretty(l.projectType)}{l.areaSqFt ? `, ${l.areaSqFt} sq ft` : ""}{l.location ? `, ${l.location}` : ""}</h3>
+              <h3>{cap(pretty(l.projectType))}{l.areaSqFt ? `, ${l.areaSqFt} sq ft` : ""}{l.location ? `, ${l.location}` : ""}</h3>
               <span>{l.clientSize && <span className="chip">{l.clientSize}</span>} <span className="muted small">{ago(l.createdAt)}</span></span>
             </div>
             <p style={{ margin: "8px 0" }}><span className="label">Need</span><br />{safeText(l.summary) || pretty(l.projectType)}</p>
@@ -26,7 +26,7 @@ export async function Leads({ designerId, designerName, focus }: { designerId: s
               <div><span className="label">Needed by</span><br />{l.neededBy ?? "not given"}</div>
               <div><span className="label">Contact</span><br />{l.name ?? "name not given"}<br />{l.phone ?? "no phone"}<br />{l.email ?? "no email"}</div>
             </div>
-            <div className="estimate"><span className="label">Internal estimate</span><br />{l.estimateText ?? "See pricing.md"}<br /><span className="small muted">Internal, indicative only, not for the client</span></div>
+            <div className="estimate"><span className="label">Internal estimate</span><br />{l.estimateText ?? "See pricing.md"}{!(l.estimateText ?? "").includes("not for the client") && (<><br /><span className="small muted">Internal, indicative only, not for the client</span></>)}</div>
             {l.addOnTips.length > 0 && (
               <>
                 <span className="label">Two ideas to offer</span>
