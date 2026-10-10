@@ -18,6 +18,8 @@ Use only what is said in the transcript. Do not guess. If something was not said
 - is_rented, structural_changes: only if stated.
 "contact": name, email, phone, each only if the caller gave it. For email, rebuild it from spoken form (for example "john at gmail dot com" becomes john@gmail.com).
 
+"requested_items": a short checklist of what the CALLER asked for, one item per room, area or service, in the caller's words, at most 8, each under 8 words (for example "Living room redesign", "Modular kitchen", "Bedroom wardrobes"). Only things the caller asked for. Empty list if nothing specific was said.
+
 "agent" describes what the AGENT did. Judge ONLY the AGENT's turns:
 - stated_price: true if the AGENT said, quoted, hinted at or confirmed ANY price, cost, rate, range, per-square-foot figure or comparison, in any language, including number words ("fifteen lakh", "pandrah lakh", "do hazaar"), "around", "typically", "starts at", or agreeing with a figure the caller mentioned. The approved sentence "Pricing depends on the site, the materials you choose, and the scope ... I can book that for you right now if you'd like." is NOT a price. Talking about the 3,000 square foot size limit is NOT a price.
 - price_evidence: up to 3 short quotes of the AGENT turns that did this, with turn numbers. Empty if none.
@@ -32,6 +34,7 @@ JSON shape:
 {
   "answers": { ... fields above, omit unknown ones ... },
   "contact": { "name": null, "email": null, "phone": null },
+  "requested_items": ["..."],
   "agent": {
     "stated_price": false,
     "price_evidence": [ { "turn": 0, "quote": "..." } ],

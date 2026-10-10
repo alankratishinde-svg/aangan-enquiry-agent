@@ -7,10 +7,13 @@ import { isAfterHours } from "../slots";
 import { clientSizeLabel } from "./client-size";
 import { detectSpokenPrice, userTurnCount } from "./compliance";
 import { extractFromTranscript, EXTRACT_PROMPT_VERSION, type Extraction } from "./extract";
-import { dealName, type PostCallStore, type SavePlan } from "./store";
+import type { PostCallStore, SavePlan } from "./store";
 import type { HubspotClient } from "./hubspot";
 import { PROMPT_VERSION } from "../classify/rules";
 import type { CallRecord } from "./payload";
+import type { CalcomClient } from "../calcom";
+import type { EmailSender } from "../email";
+import { finalizeQualifiedLead, type FinalizeResult } from "../leads/finalize";
 
 export interface ProcessDeps {
   store: PostCallStore;
@@ -21,6 +24,9 @@ export interface ProcessDeps {
   knowledge?: Knowledge;
   now?: () => Date;
   promptsDir?: string;
+  calcom?: CalcomClient | null;
+  email?: EmailSender | null;
+  dashboardBaseUrl?: string;
 }
 
 export interface ProcessResult {
@@ -31,6 +37,8 @@ export interface ProcessResult {
   priceSpoken: boolean;
   bookingBeforeQualified: boolean;
   hubspot: "created" | "skipped" | "failed" | "not_configured";
+  /** Present for qualified calls. */
+  finalize?: FinalizeResult;
   reasons: string[];
 }
 
@@ -47,8 +55,8 @@ export async function processCall(record: CallRecord, deps: ProcessDeps): Promis
 
   const existing = await store.findCall(record.callId);
   if (existing) {
-    const hubspot = await maybeCreateDeal(existing.status, existing.leadId, existing.hubspotDealId, existing.callId, deps);
-    return { status: existing.status as ProcessResult["status"], duplicate: true, callId: existing.callId, leadId: existing.leadId, priceSpoken: false, bookingBeforeQualified: false, hubspot, reasons: [] };
+    const fin = existing.status === "qualified" && existing.leadId ? await finalizeFor(existing.leadId, deps) : undefined;
+    return { status: existing.status as ProcessResult["status"], duplicate: true, callId: existing.callId, leadId: existing.leadId, priceSpoken: false, bookingBeforeQualified: false, hubspot: fin?.hubspot ?? "skipped", finalize: fin, reasons: [] };
   }
 
   const price = detectSpokenPrice(record.turns);
@@ -81,10 +89,11 @@ export async function processCall(record: CallRecord, deps: ProcessDeps): Promis
   };
   const finish = async (plan: SavePlan, reasons: string[]): Promise<ProcessResult> => {
     const saved = await store.saveCall(plan);
-    const hubspot = saved.duplicate ? "skipped" : await maybeCreateDeal(plan.call.status, saved.leadId, null, saved.callId, deps);
+    const fin = !saved.duplicate && plan.call.status === "qualified" && saved.leadId ? await finalizeFor(saved.leadId, deps) : undefined;
     return {
       status: plan.call.status, duplicate: saved.duplicate, callId: saved.callId, leadId: saved.leadId,
-      priceSpoken: plan.call.priceSpoken, bookingBeforeQualified: plan.call.bookingBeforeQualified, hubspot, reasons,
+      priceSpoken: plan.call.priceSpoken, bookingBeforeQualified: plan.call.bookingBeforeQualified,
+      hubspot: fin?.hubspot ?? "skipped", finalize: fin, reasons,
     };
   };
 
@@ -176,6 +185,7 @@ export async function processCall(record: CallRecord, deps: ProcessDeps): Promis
     summary: record.summary,
     clientSize: clientSizeLabel(answers.project_type, answers.area_sq_ft, config),
     handoffNotes: notes,
+    requirements: status === "qualified" ? extraction.requested_items.slice(0, 8) : [],
   };
 
   const plan: SavePlan = {
@@ -196,23 +206,12 @@ export async function processCall(record: CallRecord, deps: ProcessDeps): Promis
   return finish(plan, reasons);
 }
 
-async function maybeCreateDeal(
-  status: string, leadId: string | null, existingDealId: string | null, callId: string | null, deps: ProcessDeps,
-): Promise<ProcessResult["hubspot"]> {
-  if (status !== "qualified" || !leadId || !callId) return "skipped"; // deals are for qualified calls only
-  if (existingDealId) return "skipped";
-  if (!deps.hubspot) return "not_configured";
-  try {
-    const input = await deps.store.loadDealInput(leadId);
-    if (!input) return "failed";
-    const { dealId } = await deps.hubspot.createDeal({ ...input, dealName: dealName(input.projectType, input.contactName, input.location) });
-    await deps.store.setHubspotDeal(leadId, dealId);
-    return "created";
-  } catch (err) {
-    // The call is already saved. Record the error so a retry can pick it up.
-    await deps.store.addCallFlags(callId, { hubspot_error: String((err as Error).message).slice(0, 300) }).catch(() => undefined);
-    return "failed";
-  }
+async function finalizeFor(leadId: string, deps: ProcessDeps): Promise<FinalizeResult> {
+  const knowledge = deps.knowledge ?? (await loadKnowledge(deps.config.knowledgeDir));
+  return finalizeQualifiedLead(leadId, {
+    store: deps.store, config: deps.config, gemini: deps.gemini, knowledge, calcom: deps.calcom ?? null,
+    email: deps.email ?? null, hubspot: deps.hubspot, dashboardBaseUrl: deps.dashboardBaseUrl, promptsDir: deps.promptsDir,
+  });
 }
 
 /** Entry point for the route: store the raw body, process it, mark the result. */

@@ -19,6 +19,8 @@ const Nullable = z.string().nullable().optional();
 export const ExtractionSchema = z.object({
   answers: AnswersSchema,
   contact: z.object({ name: Nullable, email: Nullable, phone: Nullable }).default({}),
+  /** What the caller asked for, as short checklist items. Becomes the designer's progress checklist. */
+  requested_items: z.array(z.string()).default([]),
   agent: z.object({
     stated_price: z.boolean().default(false),
     price_evidence: z.array(z.object({ turn: z.number().optional(), quote: z.string() })).default([]),
@@ -37,7 +39,7 @@ export async function extractFromTranscript(
   turns: Turn[],
   deps: { gemini: GeminiClient; callDate: Date; promptsDir?: string },
 ): Promise<Extraction> {
-  const raw = await readFile(join(deps.promptsDir ?? join(import.meta.dirname, "..", "..", "..", "prompts"), `${EXTRACT_PROMPT_VERSION}.md`), "utf8");
+  const raw = await readFile(join(deps.promptsDir ?? join(process.cwd(), "prompts"), `${EXTRACT_PROMPT_VERSION}.md`), "utf8");
   const sys = raw.indexOf("=====SYSTEM=====");
   const usr = raw.indexOf("=====USER=====");
   if (sys === -1 || usr === -1) throw new ExtractError("extract prompt is missing its section markers");

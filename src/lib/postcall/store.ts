@@ -33,6 +33,8 @@ export interface LeadRow {
   summary: string | null;
   clientSize: string | null;
   handoffNotes: string[];
+  /** Checklist items from what the caller asked for. Becomes the designer's progress meter. */
+  requirements?: string[];
 }
 
 export interface ReviewRow {
@@ -113,6 +115,9 @@ export class PostCallStore {
           [callId, l.name, l.phone, l.email, l.projectType, l.areaSqFt, l.location, l.neededBy, l.summary, l.clientSize, JSON.stringify(l.handoffNotes)],
         );
         leadId = li.rows[0]!.id;
+        for (const item of l.requirements ?? []) {
+          await tx.query(`insert into requirements (lead_id, item) values ($1, $2)`, [leadId, item]);
+        }
         if (plan.review) {
           await tx.query(`insert into review_queue (lead_id, kind, reasons) values ($1, $2, $3::jsonb)`, [
             leadId,
@@ -133,12 +138,68 @@ export class PostCallStore {
     await this.db.query(`update calls set flags = flags || $2::jsonb where id = $1`, [callId, JSON.stringify(patch)]);
   }
 
+  async listActiveDesigners(): Promise<{ id: string; name: string; email: string }[]> {
+    const r = await this.db.query<{ id: string; name: string; email: string }>(`select id, name, email from designers where active order by name`);
+    return r.rows;
+  }
+
+  /** Open leads per designer: no booked slot yet, or the slot is still ahead. */
+  async designerLoads(): Promise<Map<string, number>> {
+    const r = await this.db.query<{ assigned_designer_id: string; n: number }>(
+      `select assigned_designer_id, count(*)::int n from leads
+        where assigned_designer_id is not null and (booked_slot is null or booked_slot >= now())
+        group by assigned_designer_id`,
+    );
+    return new Map(r.rows.map((x) => [x.assigned_designer_id, x.n]));
+  }
+
+  async loadLeadForFinalize(leadId: string): Promise<FinalizeLead | null> {
+    const r = await this.db.query<FinalizeLeadRow>(
+      `select l.id, l.call_id, l.name, l.phone, l.email, l.project_type, l.area_sq_ft, l.location, l.needed_by, l.summary,
+              l.client_size, l.handoff_notes, l.add_on_tips, l.internal_estimate, l.assigned_designer_id, l.booked_slot,
+              l.calcom_booking_uid, l.hubspot_deal_id, l.email_sent_at, c.answers, c.summary as call_summary
+         from leads l join calls c on c.id = l.call_id where l.id = $1`,
+      [leadId],
+    );
+    const x = r.rows[0];
+    if (!x) return null;
+    const date = (v: Date | string | null) => (v instanceof Date ? v.toISOString() : v);
+    return {
+      id: x.id, callId: x.call_id, name: x.name, phone: x.phone, email: x.email, projectType: x.project_type, areaSqFt: x.area_sq_ft,
+      location: x.location, neededBy: x.needed_by instanceof Date ? x.needed_by.toISOString().slice(0, 10) : x.needed_by,
+      summary: x.summary, clientSize: x.client_size, handoffNotes: x.handoff_notes ?? [], addOnTips: x.add_on_tips ?? [],
+      internalEstimate: x.internal_estimate, assignedDesignerId: x.assigned_designer_id, bookedSlot: date(x.booked_slot),
+      calcomBookingUid: x.calcom_booking_uid, hubspotDealId: x.hubspot_deal_id, emailSentAt: date(x.email_sent_at),
+      answers: x.answers, callSummary: x.call_summary,
+    };
+  }
+
+  async updateLead(leadId: string, patch: LeadPatch): Promise<void> {
+    const cols: string[] = [];
+    const vals: unknown[] = [leadId];
+    const add = (col: string, v: unknown, cast = "") => {
+      vals.push(v);
+      cols.push(`${col} = $${vals.length}${cast}`);
+    };
+    if (patch.assignedDesignerId !== undefined) add("assigned_designer_id", patch.assignedDesignerId);
+    if (patch.bookedSlot !== undefined) add("booked_slot", patch.bookedSlot);
+    if (patch.calcomBookingUid !== undefined) add("calcom_booking_uid", patch.calcomBookingUid);
+    if (patch.internalEstimate !== undefined) add("internal_estimate", JSON.stringify(patch.internalEstimate), "::jsonb");
+    if (patch.addOnTips !== undefined) add("add_on_tips", JSON.stringify(patch.addOnTips), "::jsonb");
+    if (patch.summary !== undefined) add("summary", patch.summary);
+    if (patch.handoffNotes !== undefined) add("handoff_notes", JSON.stringify(patch.handoffNotes), "::jsonb");
+    if (patch.email !== undefined) add("email", patch.email);
+    if (patch.emailSentNow) cols.push("email_sent_at = now()");
+    if (cols.length) await this.db.query(`update leads set ${cols.join(", ")} where id = $1`, vals);
+  }
+
   /** Rebuild the HubSpot deal input from a stored lead, for retries. */
   async loadDealInput(leadId: string): Promise<DealInput | null> {
     const r = await this.db.query<{
       name: string | null; phone: string | null; email: string | null; project_type: string | null; area_sq_ft: number | null;
-      location: string | null; needed_by: Date | string | null; client_size: string | null; handoff_notes: string[];
-    }>(`select name, phone, email, project_type, area_sq_ft, location, needed_by, client_size, handoff_notes from leads where id = $1`, [leadId]);
+      location: string | null; needed_by: Date | string | null; client_size: string | null; handoff_notes: string[]; estimate_text: string | null;
+    }>(`select name, phone, email, project_type, area_sq_ft, location, needed_by, client_size, handoff_notes,
+               internal_estimate->>'text' as estimate_text from leads where id = $1`, [leadId]);
     const l = r.rows[0];
     if (!l) return null;
     const neededBy = l.needed_by instanceof Date ? l.needed_by.toISOString().slice(0, 10) : l.needed_by;
@@ -153,11 +214,53 @@ export class PostCallStore {
       neededBy,
       clientSize: l.client_size,
       handoffNotes: l.handoff_notes ?? [],
-      internalEstimate: null,
+      internalEstimate: l.estimate_text,
     };
   }
 }
 
 export function dealName(projectType: string | null, name: string | null, location: string | null): string {
   return [name ?? "Unnamed caller", projectType?.replace(/_/g, " "), location].filter(Boolean).join(" - ");
+}
+
+export interface FinalizeLead {
+  id: string;
+  callId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  projectType: string | null;
+  areaSqFt: number | null;
+  location: string | null;
+  neededBy: string | null;
+  summary: string | null;
+  clientSize: string | null;
+  handoffNotes: string[];
+  addOnTips: unknown[];
+  internalEstimate: unknown;
+  assignedDesignerId: string | null;
+  bookedSlot: string | null;
+  calcomBookingUid: string | null;
+  hubspotDealId: string | null;
+  emailSentAt: string | null;
+  answers: unknown;
+  callSummary: string | null;
+}
+interface FinalizeLeadRow {
+  id: string; call_id: string; name: string | null; phone: string | null; email: string | null; project_type: string | null;
+  area_sq_ft: number | null; location: string | null; needed_by: Date | string | null; summary: string | null; client_size: string | null;
+  handoff_notes: string[] | null; add_on_tips: unknown[] | null; internal_estimate: unknown; assigned_designer_id: string | null;
+  booked_slot: Date | string | null; calcom_booking_uid: string | null; hubspot_deal_id: string | null; email_sent_at: Date | string | null;
+  answers: unknown; call_summary: string | null;
+}
+export interface LeadPatch {
+  assignedDesignerId?: string | null;
+  bookedSlot?: string | null;
+  calcomBookingUid?: string | null;
+  internalEstimate?: unknown;
+  addOnTips?: unknown;
+  summary?: string | null;
+  handoffNotes?: string[];
+  email?: string | null;
+  emailSentNow?: boolean;
 }

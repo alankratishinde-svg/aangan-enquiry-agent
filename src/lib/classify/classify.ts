@@ -93,7 +93,7 @@ export async function classifyLead(callId: string, rawAnswers: unknown, deps: Cl
 
   const round = deps.finalRound ? MAX_ROUNDS : (state?.round ?? 0) + 1;
   const asked = state?.asked ?? [];
-  const prompt = await loadPrompt(deps.promptsDir ?? join(import.meta.dirname, "..", "..", "..", "prompts"));
+  const prompt = await loadPrompt(deps.promptsDir ?? join(process.cwd(), "prompts"));
   const today = (deps.now ?? (() => new Date()))();
   const fill = (t: string) =>
     t
