@@ -1,7 +1,7 @@
 import { convertReview, deleteReview, markReviewed } from "../actions";
 import Link from "next/link";
 import { safeText } from "../../src/lib/display";
-import { ago, istDateTime, pretty } from "../../src/server/format";
+import { ago, cap, istDateTime, pretty } from "../../src/server/format";
 import { pendingReview, type ReviewItem } from "../../src/server/queries";
 import { calcom, db } from "../../src/server/runtime";
 
@@ -10,9 +10,19 @@ const reasonLine = (r: ReviewItem["reasons"][number]) => {
     case "unqualified": {
       const crit = (r.criteria as { criterion: string; status: string; evidence: string }[] | undefined) ?? [];
       return (
-        <div>
-          <span className="chip bad">Did not qualify</span> {r.decline_reason ? <span className="small">{safeText(String(r.decline_reason))}</span> : null}
-          <ul className="clean small">{crit.map((c, i) => (<li key={i}><strong>{pretty(c.criterion)}</strong>: {c.status}. <span className="muted">{safeText(c.evidence)}</span></li>))}</ul>
+        <div className="why">
+          <div className="callout">
+            <strong>Did not qualify</strong>
+            {r.decline_reason ? <p>{safeText(String(r.decline_reason))}</p> : null}
+          </div>
+          <dl className="crit">
+            {crit.map((c, i) => (
+              <div key={i} className="crit-row">
+                <dt>{cap(pretty(c.criterion))}</dt>
+                <dd><span className={`state ${c.status}`}>{c.status === "fail" ? "Failed" : "Unclear"}</span><span className="crit-note">{safeText(c.evidence)}</span></dd>
+              </div>
+            ))}
+          </dl>
         </div>
       );
     }
@@ -48,30 +58,46 @@ export async function Review({ error }: { error?: string }) {
       <p className="muted small">Nothing here is deleted by itself. Delete removes the caller's details. To convert, call the person back first, collect their email, then pick a time.</p>
       {unq.length === 0 && <div className="card"><p>Nothing waiting.</p></div>}
       {unq.map((i) => (
-        <article className="card" key={i.reviewId}>
-          <div className="row"><h3>{i.name ?? "Unnamed caller"} · {pretty(i.projectType)}{i.location ? ` · ${i.location}` : ""}</h3><span className="muted small">{istDateTime(i.startedAt)} ({ago(i.startedAt)})</span></div>
-          <p className="small">Phone: {i.phone ?? "not captured"}{i.summary ? ` · ${safeText(i.summary)}` : ""} · <Link href={`/nikhil/calls/${i.callId}`}>View the call</Link></p>
-          {i.reasons.map((r, k) => (<div key={k}>{reasonLine(r)}</div>))}
-          {i.transcript && <details><summary>Transcript</summary><pre>{safeText(i.transcript)}</pre></details>}
-          <div className="row" style={{ alignItems: "flex-start", marginTop: 10 }}>
-            <form action={convertReview} className="stack">
-              <input type="hidden" name="id" value={i.reviewId} />
-              <strong>Convert to a real lead</strong>
-              <label className="small">Email (collected on the callback)<br /><input type="email" name="email" required autoComplete="off" /></label>
-              <label className="small">Phone (optional)<br /><input type="tel" name="phone" defaultValue={i.phone ?? ""} /></label>
-              <label className="small">Consultation time<br />
-                <select name="slot" defaultValue="">
-                  <option value="">No time yet, designer will arrange</option>
-                  {slots.map((s) => (<option key={s} value={s}>{istDateTime(s)}</option>))}
-                </select>
-              </label>
-              <button className="primary">Convert and assign a designer</button>
-            </form>
-            <form action={deleteReview}><input type="hidden" name="id" value={i.reviewId} /><button className="danger">Delete</button></form>
+        <article className="card case" key={i.reviewId}>
+          <header className="case-head">
+            <h3>{i.name ?? "Unnamed caller"}</h3>
+            <p className="case-meta">
+              {[cap(pretty(i.projectType)), i.location, i.phone ?? "No phone captured"].filter(Boolean).join("  ·  ")}
+              <span className="case-time">{istDateTime(i.startedAt)}, {ago(i.startedAt)}</span>
+            </p>
+          </header>
+          {i.summary && <p className="case-summary">{safeText(i.summary)}</p>}
+          <div className="case-body">
+            <div>
+              {i.reasons.map((r, k) => (<div key={k}>{reasonLine(r)}</div>))}
+              <p className="case-links">
+                <Link href={`/nikhil/calls/${i.callId}`}>Read the full call</Link>
+              </p>
+              {i.transcript && <details><summary>Show transcript</summary><pre>{safeText(i.transcript)}</pre></details>}
+            </div>
+            <div className="decide">
+              <form action={convertReview} className="stack">
+                <input type="hidden" name="id" value={i.reviewId} />
+                <h4>Convert to a real lead</h4>
+                <p className="small muted">Call the person back first and collect their email.</p>
+                <label className="small">Email<input type="email" name="email" required autoComplete="off" /></label>
+                <label className="small">Phone, optional<input type="tel" name="phone" defaultValue={i.phone ?? ""} /></label>
+                <label className="small">Consultation time
+                  <select name="slot" defaultValue="">
+                    <option value="">No time yet, designer will arrange</option>
+                    {slots.map((s) => (<option key={s} value={s}>{istDateTime(s)}</option>))}
+                  </select>
+                </label>
+                <button className="primary">Convert and assign a designer</button>
+              </form>
+              <form action={deleteReview} className="delete">
+                <input type="hidden" name="id" value={i.reviewId} />
+                <button className="danger">Delete this enquiry</button>
+              </form>
+            </div>
           </div>
         </article>
       ))}
-
     </section>
   );
 }

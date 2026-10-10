@@ -208,3 +208,8 @@ Other gaps: no calendar tool in Vaani except a Cal.com integration (brief says G
 - Vaani docs link.
 - GitHub remote URL.
 - Supabase project (URL and keys), Gemini key, Resend key, HubSpot token, Google service account. Needed from Milestone 3 onward for live runs. Mocks cover tests.
+
+## 2026-10-10: card polish
+- Home dashboard cards: image header, serif title, full-width rows (name, hint, chevron).
+- Review case card: serif name, meta line, clamped summary, "Did not qualify" callout, criteria with Failed/Unclear pills, sand "Convert to a real lead" panel, Delete as a separate full-width button.
+- Checked in browser at 800px width; tsc clean; 188 tests pass.
