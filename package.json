@@ -10,7 +10,8 @@
     "eval:classify": "tsx scripts/eval-classification.ts",
     "eval:price": "tsx scripts/eval-agent-price.ts",
     "db:check": "tsx scripts/db-check.ts",
-    "vaani:sync": "tsx scripts/sync-vaani-agent.ts"
+    "vaani:sync": "tsx scripts/sync-vaani-agent.ts",
+    "calcom:setup": "tsx scripts/setup-calcom.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",

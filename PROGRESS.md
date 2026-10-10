@@ -106,8 +106,14 @@ Other gaps: no calendar tool in Vaani except a Cal.com integration (brief says G
 - BLOCKED: creating the agent returned `401 Invalid API key`. The same key returned 200 on `GET /api/agents` earlier today, and now every endpoint returns 401, so the key was revoked or rotated. Need a fresh key (Vaani dashboard, Settings, API Keys) put into `.env.local` as `VAANI_API_KEY`. No agent was created. Then run `npm run vaani:sync`; it saves `VAANI_AGENT_ID` to `.env.local`.
 - After any change to `knowledge/*.md`, re-run `npm run vaani:sync` (native agents cannot load files per call).
 
+## Vaani dashboard findings (screenshots, 2026-10-10)
+- Sidebar: Agents, Knowledge Base, Tools & Actions, Voice Lab, Telephony, Integrations, Templates, Automations. Agent list is empty.
+- Tools & Actions has 5 built-in system tools: Hold Call, Transfer Call, Schedule Callback, Agent Transfer, Entities Extraction. There is a "New Action" button (custom actions: not yet seen, may allow an API or webhook call mid-call). Still to see: the New Action form, Integrations (Cal.com) and Knowledge Base pages.
+- Schedule Callback may serve the failed-call path. Entities Extraction may capture name, phone, email during the call.
+
 ## Cal.com (2026-10-10)
 - `CALCOM_API_KEY` saved in `.env.local` (gitignored). Verified read-only: `GET https://api.cal.com/v2/me` returns 200 (Bearer auth), account timezone Asia/Kolkata, one user. Event types found: 30min, 15min, secret (15). No 45-minute type yet.
+- DECIDED (user, 2026-10-10): one calendar for now, new 45-minute event type. DONE: event type `aangan-consultation` (id 7422070, 45 min) on its own schedule "Aangan consultation hours" (id 2480201): Mon to Sat 10:00 to 19:00 Asia/Kolkata, minimum notice 120 min, from config. Your default Cal.com schedule (Mon to Fri 9 to 5) is untouched. Verified: `/v2/slots` returns 45-minute slots on those days, none on Sunday. Re-run `npm run calcom:setup` after changing booking config. All bookings land on one calendar (designers are not separated yet).
 - Brief says Google Calendar, Cal.com only if asked. Decision pending: is Cal.com now the booking tool? One Cal.com user = one calendar, but the brief has 4 designers with separate calendars (needs a Cal.com team with round-robin, or 4 accounts/keys). Vaani also has a native Cal.com integration, but with BYOL our own server would book through the API.
 
 ## Milestones
