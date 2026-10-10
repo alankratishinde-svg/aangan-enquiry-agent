@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { nikhilLogin } from "../../actions";
+import { openAccess } from "../../../src/server/session";
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  if (openAccess()) redirect("/nikhil");
   const { error } = await searchParams;
   return (
     <>

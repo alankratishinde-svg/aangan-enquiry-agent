@@ -46,6 +46,13 @@ export async function currentRole(): Promise<Role | null> {
   return readSession((await cookies()).get(COOKIE)?.value);
 }
 
+/**
+ * TEST MODE. With OPEN_ACCESS=true the front desk and Nikhil pages need no password. Designers still use their personal
+ * link, because it says whose leads to show. Turn it off (remove the variable) before real customers call: these pages
+ * show phone numbers and transcripts.
+ */
+export const openAccess = () => process.env.OPEN_ACCESS === "true";
+
 /** Page guards. A wrong role is sent to that role's login page. */
 export async function requireDesigner() {
   const r = await currentRole();
@@ -53,11 +60,13 @@ export async function requireDesigner() {
   return r;
 }
 export async function requireFrontDesk() {
+  if (openAccess()) return { kind: "frontdesk" } as const;
   const r = await currentRole();
   if (!r || r.kind !== "frontdesk") redirect("/frontdesk/login");
   return r;
 }
 export async function requireNikhil() {
+  if (openAccess()) return { kind: "nikhil" } as const;
   const r = await currentRole();
   if (!r || r.kind !== "nikhil") redirect("/nikhil/login");
   return r;

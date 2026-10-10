@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { frontDeskLogin } from "../../actions";
+import { openAccess } from "../../../src/server/session";
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  if (openAccess()) redirect("/frontdesk");
   const { error } = await searchParams;
   return (
     <>

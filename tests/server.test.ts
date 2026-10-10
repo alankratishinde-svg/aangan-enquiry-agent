@@ -268,6 +268,20 @@ describe("sessions", () => {
     expect(readSession(undefined)).toBeNull();
     expect(readSession("garbage")).toBeNull();
   });
+  it("OPEN_ACCESS test mode: front desk and Nikhil need no sign-in, designers still do, and it is off by default", async () => {
+    const { requireFrontDesk, requireNikhil, requireDesigner, openAccess } = await import("../src/server/session");
+    delete process.env.OPEN_ACCESS;
+    expect(openAccess()).toBe(false);
+    await expect(requireFrontDesk()).rejects.toThrow(/redirect:\/frontdesk\/login/);
+    await expect(requireNikhil()).rejects.toThrow(/redirect:\/nikhil\/login/);
+    process.env.OPEN_ACCESS = "true";
+    expect(await requireFrontDesk()).toEqual({ kind: "frontdesk" });
+    expect(await requireNikhil()).toEqual({ kind: "nikhil" });
+    await expect(requireDesigner()).rejects.toThrow(/redirect:\/designer\/login/);
+    process.env.OPEN_ACCESS = "false";
+    expect(openAccess()).toBe(false);
+    delete process.env.OPEN_ACCESS;
+  });
   it("password check fails closed when no password is configured or it is too short", async () => {
     const { passwordOk } = await import("../src/server/session");
     expect(passwordOk("hunter2hunter2", "hunter2hunter2")).toBe(true);
