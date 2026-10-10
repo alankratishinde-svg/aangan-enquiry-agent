@@ -18,7 +18,9 @@
     "build": "next build",
     "start": "next start",
     "designers:links": "tsx scripts/designer-tokens.ts",
-    "rubric:apply": "tsx scripts/apply-rubric.ts"
+    "rubric:apply": "tsx scripts/apply-rubric.ts",
+    "demo:seed": "tsx scripts/demo-data.ts",
+    "demo:clean": "tsx scripts/demo-data.ts --clean"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",
