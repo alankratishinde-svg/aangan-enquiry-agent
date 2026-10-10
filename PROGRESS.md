@@ -10,7 +10,15 @@
 - Milestone 2 (Context bundle and knowledge loader): DONE. 21 tests in `tests/context-bundle.test.ts`, all pass. Includes the acceptance test (edit a knowledge file, next call reflects it). `npm test` = 29 pass, 1 skipped placeholder. `npm run typecheck` clean.
 - Pre-M3 fallback: DONE. If call context fails to build, caller hears the polite callback message and a failed-call record with `callback_due_at` (now + 60 min) is written to the callback list. `src/lib/call-start.ts`, 7 tests.
 - Milestone 3 (Classification): DONE. `classify_lead` + Gemini prompt (a) + rule engine. Live eval against real Gemini: 42/42 PASS (`npm run eval:classify`, report in `docs/eval/classification-latest.md`). Agent price check: 6/6 PASS (`npm run eval:price`, `docs/eval/agent-price-latest.md`). Unit tests: `npm test` (mock Gemini, no network).
-- Next: Milestone 4 (Vaani integration), blocked on the BYOL hosting decision (Fly.io recommended). Milestone 5 (booking) needs the Google service account.
+- DECISION (2026-10-10, user): STACK-ONLY. The course slide stack is a hard rule: Claude Chat, Claude Code, Vaani Labs, Gemini Flash, Cal.com/Calendly/Google Calendar, Telegram or Resend, HubSpot, Supabase/Neon, Vercel, GitHub. NO Fly.io, Railway or any separate server host, so NO BYOL (it needs a persistent WebSocket server, which Vercel cannot host). Milestone 4 is redesigned below.
+- Next: Milestone 4 (Vaani native agent, stack-only). Needs from the user: a screenshot of the Vaani dashboard Agent Config (any Functions, Actions or Cal.com section) so we know what the native integration supports. `persona.actions.functions` is undocumented in Vaani's official API (openapi has only trigger-call, call-history, transcript, stream, call_details; agent config is dashboard-only).
+
+### Milestone 4 redesign (stack-only)
+1. Agent runs natively inside Vaani. Qualification questions and the never-say-price rules live in the agent prompt (built from knowledge files, pasted or synced into the dashboard config).
+2. Booking uses Vaani's built-in Cal.com integration (verify in dashboard), only after the agent judges the lead qualified.
+3. `call_postprocessing` webhook (transcript, summary, dispositions) lands on a Vercel API route. That route runs `classifyLead` + `applyRules` on the transcript, writes to Neon, creates the HubSpot deal for qualified calls, and sends the designer handoff (Telegram or Resend, student's choice, defended in the debrief).
+Trade-offs to flag to Nikhil: code can no longer block booking mid-call; hard rule 1 (no price) is enforced by prompt plus a post-call check on the transcript; per-call fresh knowledge context is not possible for inbound calls, so knowledge files must be re-synced to the agent prompt when they change.
+Milestone 5 (booking) now means Cal.com via Vaani, not a Google service account.
 - Vercel: no Vercel token or API URL was found in any `.env` file (the `.env.local` and `.env.vercel` in ~/Downloads belong to another app). The Vercel connector in this session can deploy when Milestone 7 needs it.
 - GitHub: private repo https://github.com/alankratishinde-svg/aangan-enquiry-agent (pushed).
 - `.env.local` created (gitignored) with Vaani key, plus Gemini key and Supabase URL/service key copied from the Two Tickets project at user request.
