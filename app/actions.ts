@@ -5,26 +5,22 @@ import { revalidatePath } from "next/cache";
 import { ConvertError, convertLead } from "../src/lib/leads/convert";
 import { setRequirement, markCalledBack, resolveReview, decideProposal } from "../src/server/queries";
 import { calcom, config, db, email, gemini, hubspot, store } from "../src/server/runtime";
-import { clearSession, passwordOk, requireDesigner, requireFrontDesk, requireNikhil, setSession } from "../src/server/session";
+import { clearSession, passwordOk, requireDashboard, requireTeam, setSession } from "../src/server/session";
 import { loadKnowledge } from "../src/lib/knowledge";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 
 export async function toggleRequirement(form: FormData) {
-  const me = await requireDesigner();
-  await setRequirement(db(), me.designerId, str(form, "id"), str(form, "delivered") === "true");
-  revalidatePath("/designer");
+  const me = await requireDashboard();
+  await setRequirement(db(), me.scope === "designer" ? me.designerId : null, str(form, "id"), str(form, "delivered") === "true");
+  revalidatePath("/");
 }
 
-export async function frontDeskLogin(form: FormData) {
-  if (!passwordOk(str(form, "password"), process.env.FRONT_DESK_PASSWORD)) redirect("/frontdesk/login?error=1");
+/** Used only when OPEN_ACCESS is off. */
+export async function teamLogin(form: FormData) {
+  if (!passwordOk(str(form, "password"), process.env.TEAM_PASSWORD)) redirect("/login?error=1");
   await setSession({ kind: "frontdesk" });
-  redirect("/frontdesk");
-}
-export async function nikhilLogin(form: FormData) {
-  if (!passwordOk(str(form, "password"), process.env.NIKHIL_PASSWORD)) redirect("/nikhil/login?error=1");
-  await setSession({ kind: "nikhil" });
-  redirect("/nikhil");
+  redirect("/");
 }
 export async function logout() {
   await clearSession();
@@ -32,23 +28,23 @@ export async function logout() {
 }
 
 export async function deleteReview(form: FormData) {
-  await requireFrontDesk();
+  await requireTeam();
   await resolveReview(db(), str(form, "id"), "delete", "front desk");
-  revalidatePath("/frontdesk");
+  revalidatePath("/");
 }
 export async function markReviewed(form: FormData) {
-  await requireFrontDesk();
+  await requireTeam();
   await resolveReview(db(), str(form, "id"), "reviewed", "front desk");
-  revalidatePath("/frontdesk");
+  revalidatePath("/");
 }
 export async function calledBack(form: FormData) {
-  await requireFrontDesk();
+  await requireTeam();
   await markCalledBack(db(), str(form, "id"));
-  revalidatePath("/frontdesk/callbacks");
+  revalidatePath("/");
 }
 
 export async function convertReview(form: FormData) {
-  await requireFrontDesk();
+  await requireTeam();
   const cfg = config();
   let error = "";
   try {
@@ -63,17 +59,17 @@ export async function convertReview(form: FormData) {
   } catch (err) {
     error = err instanceof ConvertError ? err.message : `Could not convert: ${(err as Error).message.slice(0, 160)}`;
   }
-  revalidatePath("/frontdesk");
-  if (error) redirect(`/frontdesk?error=${encodeURIComponent(error)}`);
+  revalidatePath("/");
+  if (error) redirect(`/?error=${encodeURIComponent(error)}#review`);
 }
 
 export async function approveProposal(form: FormData) {
-  await requireNikhil();
+  await requireTeam();
   await decideProposal(db(), str(form, "id"), "approved", "Nikhil");
-  revalidatePath("/nikhil");
+  revalidatePath("/");
 }
 export async function rejectProposal(form: FormData) {
-  await requireNikhil();
+  await requireTeam();
   await decideProposal(db(), str(form, "id"), "rejected", "Nikhil");
-  revalidatePath("/nikhil");
+  revalidatePath("/");
 }

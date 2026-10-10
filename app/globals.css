@@ -10,7 +10,10 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 syste
 a { color: var(--accent); }
 header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
 header.top strong { font-size: 18px; }
-header.top nav { display: flex; gap: 16px; flex: 1; }
+header.top nav { display: flex; flex-wrap: wrap; gap: 8px 16px; flex: 1; }
+header.top { position: sticky; top: 0; z-index: 5; }
+section { scroll-margin-top: 90px; }
+h3.big { font-size: 28px; margin: 4px 0; }
 main { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
 h1 { font-size: 24px; margin: 0 0 4px; } h2 { font-size: 18px; margin: 28px 0 10px; } h3 { font-size: 16px; margin: 0; }
 .muted { color: var(--muted); } .small { font-size: 14px; }

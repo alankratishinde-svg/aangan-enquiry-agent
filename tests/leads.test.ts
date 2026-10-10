@@ -145,7 +145,7 @@ describe("finalize a qualified lead", () => {
     expect(l!.summary).toBe("A 3BHK redesign in Baner.");
     expect(l!.hubspot_deal_id).toBe("deal-1");
     expect(email.sent).toHaveLength(1);
-    expect(email.sent[0]!.text).toContain("https://app.example/designer?lead=");
+    expect(email.sent[0]!.text).toContain("https://app.example/?lead=");
     expect(email.sent[0]!.text).toContain(ESTIMATE_LABEL);
     expect(hubspot.deals[0]!.internalEstimate).toContain(ESTIMATE_LABEL);
     const items = await q<{ item: string; delivered: boolean }>("select item, delivered from requirements order by item");

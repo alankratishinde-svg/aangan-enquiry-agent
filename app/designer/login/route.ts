@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     const d = await designerByToken(token);
     if (d) {
       await setSession({ kind: "designer", designerId: d.id, name: d.name });
-      return NextResponse.redirect(new URL(`/designer${url.searchParams.get("lead") ? `?lead=${encodeURIComponent(url.searchParams.get("lead")!)}` : ""}`, url.origin));
+      return NextResponse.redirect(new URL(`/${url.searchParams.get("lead") ? `?lead=${encodeURIComponent(url.searchParams.get("lead")!)}` : ""}#leads`, url.origin));
     }
   }
   return new NextResponse(

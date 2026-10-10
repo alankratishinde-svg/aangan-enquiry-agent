@@ -12,7 +12,7 @@ import { pgliteDb } from "../src/lib/postcall/db";
 import { MockHubspotClient } from "../src/lib/postcall/hubspot";
 import { PostCallStore } from "../src/lib/postcall/store";
 import { draftRubricProposal, previousWeekStart, runWeekly } from "../src/lib/weekly";
-import { callbackList, decideProposal, designerLeads, markCalledBack, pendingReview, progressPct, resolveReview, setRequirement } from "../src/server/queries";
+import { callbackList, decideProposal, designerLeads, leadsFor, markCalledBack, pendingReview, progressPct, resolveReview, setRequirement } from "../src/server/queries";
 
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, set: () => undefined, delete: () => undefined }) }));
 vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`redirect:${u}`); } }));
@@ -72,6 +72,28 @@ describe("designer view", () => {
     expect(await setRequirement(sql, d1!, r1!.id, true)).toBe(true);
     expect(progressPct((await designerLeads(sql, d1!))[0]!.requirements)).toBe(50);
     expect(progressPct([])).toBe(0);
+  });
+});
+
+describe("one team view", () => {
+  it("the whole-team view lists every qualified lead with its designer, including unassigned ones; a designer sees only theirs", async () => {
+    const [d1, d2] = (await q<{ id: string }>("select id from designers order by name limit 2")).map((x) => x.id);
+    await seedLead(await seedCall("a", "qualified"), { email: "a@x.co", designer: d1, name: "A" });
+    await seedLead(await seedCall("b", "qualified"), { email: "b@x.co", designer: d2, name: "B" });
+    await seedLead(await seedCall("c", "qualified"), { name: "C" }); // qualified, no designer yet
+    await seedLead(await seedCall("u", "unqualified"), { name: "U" }); // unqualified: review queue only
+    const team = await leadsFor(sql, null);
+    expect(team.map((l) => l.name).sort()).toEqual(["A", "B", "C"]);
+    expect(team.find((l) => l.name === "A")!.designerName).toBeTruthy();
+    expect(team.find((l) => l.name === "C")!.designerName).toBeNull();
+    expect((await leadsFor(sql, d1!)).map((l) => l.name)).toEqual(["A"]);
+  });
+  it("the team view can tick any checklist item", async () => {
+    const [d1] = (await q<{ id: string }>("select id from designers order by name limit 1")).map((x) => x.id);
+    const l = await seedLead(await seedCall("a", "qualified"), { email: "a@x.co", designer: d1 });
+    await q(`insert into requirements (lead_id, item) values ($1, 'Kitchen')`, [l]);
+    const [r] = await q<{ id: string }>("select id from requirements");
+    expect(await setRequirement(sql, null, r!.id, true)).toBe(true);
   });
 });
 
@@ -268,16 +290,15 @@ describe("sessions", () => {
     expect(readSession(undefined)).toBeNull();
     expect(readSession("garbage")).toBeNull();
   });
-  it("OPEN_ACCESS test mode: front desk and Nikhil need no sign-in, designers still do, and it is off by default", async () => {
-    const { requireFrontDesk, requireNikhil, requireDesigner, openAccess } = await import("../src/server/session");
+  it("one dashboard: OPEN_ACCESS shows everything without sign-in; otherwise it needs the team sign-in or a designer link", async () => {
+    const { requireDashboard, requireTeam, openAccess } = await import("../src/server/session");
     delete process.env.OPEN_ACCESS;
     expect(openAccess()).toBe(false);
-    await expect(requireFrontDesk()).rejects.toThrow(/redirect:\/frontdesk\/login/);
-    await expect(requireNikhil()).rejects.toThrow(/redirect:\/nikhil\/login/);
+    await expect(requireDashboard()).rejects.toThrow(/redirect:\/login/);
+    await expect(requireTeam()).rejects.toThrow(/redirect:\/login/);
     process.env.OPEN_ACCESS = "true";
-    expect(await requireFrontDesk()).toEqual({ kind: "frontdesk" });
-    expect(await requireNikhil()).toEqual({ kind: "nikhil" });
-    await expect(requireDesigner()).rejects.toThrow(/redirect:\/designer\/login/);
+    expect(await requireDashboard()).toEqual({ scope: "all" });
+    await expect(requireTeam()).resolves.toBeUndefined();
     process.env.OPEN_ACCESS = "false";
     expect(openAccess()).toBe(false);
     delete process.env.OPEN_ACCESS;

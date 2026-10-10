@@ -1,13 +1,34 @@
-import Link from "next/link";
+import { logout } from "./actions";
+import { Callbacks } from "./_components/Callbacks";
+import { Leads } from "./_components/Leads";
+import { Overview } from "./_components/Overview";
+import { Review } from "./_components/Review";
+import { Rubric } from "./_components/Rubric";
+import { openAccess, requireDashboard } from "../src/server/session";
 
-export default function Home() {
+/** The one dashboard: this week, leads, review queue, callbacks, rubric changes. A designer's link shows only their leads. */
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ lead?: string; error?: string; designer?: string }> }) {
+  const me = await requireDashboard();
+  const { lead, error, designer } = await searchParams;
+  if (me.scope === "designer") {
+    return (
+      <>
+        <div className="row"><div><h1>Your leads</h1><p className="muted">Signed in as {me.name}.</p></div><form action={logout}><button>Sign out</button></form></div>
+        <Leads designerId={me.designerId} focus={lead} />
+      </>
+    );
+  }
   return (
     <>
-      <h1>Aangan phone enquiries</h1>
-      <p className="muted">Every call is answered, qualified and booked by the voice agent. Pick your view.</p>
-      <div className="card"><h3><Link href="/designer">Designer dashboard</Link></h3><p className="muted small">Your qualified leads, with the booked time, an internal estimate, two add-on ideas and a progress meter. Sign in with the link from your lead email.</p></div>
-      <div className="card"><h3><Link href="/frontdesk">Front desk</Link></h3><p className="muted small">Review queue (delete or convert), flagged calls, and the callback list with its one hour target.</p></div>
-      <div className="card"><h3><Link href="/nikhil">Nikhil</Link></h3><p className="muted small">This week's numbers, what to improve, and rubric changes waiting for your approval.</p></div>
+      <div className="row">
+        <div><h1>Aangan enquiries</h1><p className="muted">Everything in one place.{openAccess() ? " Test mode: no sign-in." : ""}</p></div>
+        {!openAccess() && <form action={logout}><button>Sign out</button></form>}
+      </div>
+      <Overview />
+      <Leads designerId={null} focus={lead} filter={designer} />
+      <Review error={error} />
+      <Callbacks />
+      <Rubric />
     </>
   );
 }

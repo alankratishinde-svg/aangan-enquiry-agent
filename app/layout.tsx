@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Aangan enquiries", description: "Phone enquiries, leads and reviews for Aangan Studio" };
@@ -12,9 +11,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="top">
           <strong>Aangan enquiries</strong>
           <nav>
-            <Link href="/designer">Designer</Link>
-            <Link href="/frontdesk">Front desk</Link>
-            <Link href="/nikhil">Nikhil</Link>
+            <a href="/#overview">This week</a>
+            <a href="/#leads">Leads</a>
+            <a href="/#review">Needs review</a>
+            <a href="/#callbacks">Callbacks</a>
+            <a href="/#rubric">Rubric</a>
           </nav>
         </header>
         <main>{children}</main>

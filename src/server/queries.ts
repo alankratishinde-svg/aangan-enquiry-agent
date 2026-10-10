@@ -16,19 +16,27 @@ export interface DesignerLead {
   addOnTips: { title: string; detail: string }[];
   estimateText: string | null;
   createdAt: string;
+  designerName: string | null;
+  designerId: string | null;
   requirements: { id: string; item: string; delivered: boolean }[];
 }
 
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : (v as string | null));
 
-/** A designer sees only leads assigned to them. */
-export async function designerLeads(sql: Sql, designerId: string): Promise<DesignerLead[]> {
+/**
+ * Leads for the dashboard. With a designer id: only that designer's leads. With null (the whole team view): every
+ * qualified lead plus every converted lead, with the designer's name.
+ */
+export async function leadsFor(sql: Sql, designerId: string | null): Promise<DesignerLead[]> {
   const r = await sql.query<Record<string, unknown>>(
     `select l.id, l.name, l.phone, l.email, l.project_type, l.area_sq_ft, l.location, l.needed_by, l.client_size, l.summary, l.booked_slot,
-            l.handoff_notes, l.add_on_tips, l.internal_estimate->>'text' as estimate_text, l.created_at,
+            l.handoff_notes, l.add_on_tips, l.internal_estimate->>'text' as estimate_text, l.created_at, l.assigned_designer_id, d.name as designer_name,
             coalesce((select json_agg(json_build_object('id', q.id, 'item', q.item, 'delivered', q.delivered) order by q.item)
                         from requirements q where q.lead_id = l.id), '[]'::json) as requirements
-       from leads l where l.assigned_designer_id = $1 order by l.created_at desc limit 100`,
+       from leads l join calls c on c.id = l.call_id left join designers d on d.id = l.assigned_designer_id
+      where ($1::uuid is not null and l.assigned_designer_id = $1)
+         or ($1::uuid is null and (c.status = 'qualified' or l.assigned_designer_id is not null))
+      order by l.created_at desc limit 100`,
     [designerId],
   );
   return r.rows.map((x) => ({
@@ -37,15 +45,19 @@ export async function designerLeads(sql: Sql, designerId: string): Promise<Desig
     neededBy: x.needed_by instanceof Date ? x.needed_by.toISOString().slice(0, 10) : (x.needed_by as string | null),
     clientSize: x.client_size as string | null, summary: x.summary as string | null, bookedSlot: iso(x.booked_slot),
     handoffNotes: (x.handoff_notes as string[]) ?? [], addOnTips: (x.add_on_tips as { title: string; detail: string }[]) ?? [],
-    estimateText: x.estimate_text as string | null, createdAt: iso(x.created_at)!, requirements: (x.requirements as DesignerLead["requirements"]) ?? [],
+    estimateText: x.estimate_text as string | null, createdAt: iso(x.created_at)!, designerName: x.designer_name as string | null,
+    designerId: x.assigned_designer_id as string | null, requirements: (x.requirements as DesignerLead["requirements"]) ?? [],
   }));
 }
 
-/** Tick or untick a checklist item, only if the lead belongs to this designer. */
-export async function setRequirement(sql: Sql, designerId: string, requirementId: string, delivered: boolean): Promise<boolean> {
+/** A designer sees only leads assigned to them. */
+export const designerLeads = (sql: Sql, designerId: string) => leadsFor(sql, designerId);
+
+/** Tick or untick a checklist item. A designer can only tick their own; designerId null (team view) can tick any. */
+export async function setRequirement(sql: Sql, designerId: string | null, requirementId: string, delivered: boolean): Promise<boolean> {
   const r = await sql.query(
     `update requirements q set delivered = $3
-       from leads l where q.id = $2 and l.id = q.lead_id and l.assigned_designer_id = $1 returning q.id`,
+       from leads l where q.id = $2 and l.id = q.lead_id and ($1::uuid is null or l.assigned_designer_id = $1) returning q.id`,
     [designerId, requirementId, delivered],
   );
   return r.rows.length === 1;

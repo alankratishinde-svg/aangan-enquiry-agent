@@ -47,29 +47,27 @@ export async function currentRole(): Promise<Role | null> {
 }
 
 /**
- * TEST MODE. With OPEN_ACCESS=true the front desk and Nikhil pages need no password. Designers still use their personal
- * link, because it says whose leads to show. Turn it off (remove the variable) before real customers call: these pages
- * show phone numbers and transcripts.
+ * TEST MODE. With OPEN_ACCESS=true the dashboard needs no password and shows the whole team's work. Turn it off
+ * (remove the variable) before real customers call: it shows phone numbers and transcripts.
  */
 export const openAccess = () => process.env.OPEN_ACCESS === "true";
 
-/** Page guards. A wrong role is sent to that role's login page. */
-export async function requireDesigner() {
+export type Scope = { scope: "all" } | { scope: "designer"; designerId: string; name: string };
+
+/** The one dashboard. Open mode and team sign-in see everything; a designer's personal link sees only their leads. */
+export async function requireDashboard(): Promise<Scope> {
+  if (openAccess()) return { scope: "all" };
   const r = await currentRole();
-  if (!r || r.kind !== "designer") redirect("/designer/login");
-  return r;
+  if (r?.kind === "designer") return { scope: "designer", designerId: r.designerId, name: r.name };
+  if (r?.kind === "frontdesk") return { scope: "all" };
+  redirect("/login");
 }
-export async function requireFrontDesk() {
-  if (openAccess()) return { kind: "frontdesk" } as const;
+
+/** Actions that touch the whole team's data (review, callbacks, rubric). Designers cannot. */
+export async function requireTeam(): Promise<void> {
+  if (openAccess()) return;
   const r = await currentRole();
-  if (!r || r.kind !== "frontdesk") redirect("/frontdesk/login");
-  return r;
-}
-export async function requireNikhil() {
-  if (openAccess()) return { kind: "nikhil" } as const;
-  const r = await currentRole();
-  if (!r || r.kind !== "nikhil") redirect("/nikhil/login");
-  return r;
+  if (r?.kind !== "frontdesk") redirect("/login");
 }
 
 export function passwordOk(given: string, expected: string | undefined): boolean {
