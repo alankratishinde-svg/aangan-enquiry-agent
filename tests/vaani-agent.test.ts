@@ -86,6 +86,15 @@ describe("Vaani client", () => {
     expect(JSON.parse(seen!.init.body as string)).toEqual({ agent_display_name: "X", config: { persona: { identity: { system_prompt: "hi" } } } });
   });
 
+  it("create also accepts an id-shaped response, and refuses to guess when none is present", async () => {
+    const mk = (body: unknown) => new VaaniRestClient({ apiKey: "k", fetchImpl: (async () => ok(body)) as unknown as typeof fetch });
+    expect((await mk({ id: "x-1" }).createAgent("X", {})).agentId).toBe("x-1");
+    expect((await mk({ data: { agent_id: "x-2" } }).createAgent("X", {})).agentId).toBe("x-2");
+    const err = await mk({ ok: true }).createAgent("X", {}).catch((e) => e);
+    expect(err.message).toMatch(/no agent id/);
+    expect(err.message).toMatch(/may still have been created/);
+  });
+
   it("update uses PATCH on the persona path", async () => {
     let seen: { url: string; method?: string } | undefined;
     const c = new VaaniRestClient({

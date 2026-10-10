@@ -52,12 +52,16 @@ export class VaaniRestClient implements VaaniClient {
   }
 
   async createAgent(displayName: string, config: Record<string, unknown>) {
-    const r = (await this.call("POST", "/api/create-agent", { agent_display_name: displayName, config })) as {
-      success?: boolean;
-      agent_id?: string;
-    };
-    if (!r.success || !r.agent_id) throw new VaaniError("Vaani create-agent did not return an agent_id");
-    return { agentId: r.agent_id };
+    const r = (await this.call("POST", "/api/create-agent", { agent_display_name: displayName, config })) as Record<string, unknown>;
+    // Docs show { success, agent_id }. Accept the nearby shapes too, but never guess an id.
+    const data = (typeof r.data === "object" && r.data ? r.data : {}) as Record<string, unknown>;
+    const id = [r.agent_id, r.id, data.agent_id, data.id].find((v): v is string => typeof v === "string" && v.length > 0);
+    if (!id) {
+      throw new VaaniError(
+        `Vaani create-agent returned no agent id (response keys: ${Object.keys(r).join(", ") || "none"}). The agent may still have been created: check listAgents.`,
+      );
+    }
+    return { agentId: id };
   }
 
   async updatePersona(agentId: string, persona: Record<string, unknown>) {
