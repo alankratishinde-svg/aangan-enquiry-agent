@@ -22,10 +22,12 @@
     "demo:seed": "tsx scripts/demo-data.ts",
     "demo:clean": "tsx scripts/demo-data.ts --clean",
     "eval:e2e": "tsx scripts/eval-e2e.ts",
-    "vaani:ingest": "tsx scripts/ingest-call.ts"
+    "vaani:ingest": "tsx scripts/ingest-call.ts",
+    "test:call": "NODE_ENV=production tsx scripts/test-call.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",
+    "@livekit/rtc-node": "^1.1.0",
     "@types/diff": "^7.0.2",
     "@types/node": "^26.6.4",
     "@types/pg": "^8.23.1",

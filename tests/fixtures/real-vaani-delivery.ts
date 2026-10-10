@@ -1,0 +1,43 @@
+// Captured from production on 2026-10-10: Vaani's real call_postprocessing delivery for a web test call.
+export const REAL_TRANSCRIPT = [
+  "[12:31:11] AGENT: Hello, thank you for calling Aangan Studio, How can I help you today?",
+  "[12:31:20] USER: Hi. I want to redo my three b h k flat in Barnet. Full design and execution, please.",
+  "[12:31:31] AGENT: I would be happy to help with that! A 3BHK full design and execution sounds like a great project. May I please have your name first?",
+  "[12:31:36] USER: My name is Rahul Sharma.",
+  "[12:31:45] AGENT: Nice to meet you, Rahul! Could you confirm if the flat is in Baner, Pune? And approximately when are you looking to have the project completed?",
+  "[12:31:51] USER: I need it finished in about five months.",
+  "[12:32:02] AGENT: That timeline works well for us. Are you the primary decision-maker for this project, or will someone else be involved in the final decisions?",
+  "[12:32:07] USER: Yes. It is my flat. I decide.",
+  "[12:32:16] AGENT: Thanks for confirming that, Rahul. Could you please share your email address and phone number so I can book a consultation for you?",
+  "[12:32:27] USER: My email is rahul.sharma.test@example.com. My phone number is (982) 001-1223.",
+  "[12:32:42] AGENT: Thank you, Rahul. I have noted your email as rahul.sharma.test@example.com and your phone number as 9820011223. Let me check the available time slots for your consultation.",
+  "[12:32:47] USER: The first time you offered works for me.",
+  "[12:32:57] AGENT: A designer will call you shortly to arrange a convenient time for your consultation. Have a wonderful day ahead!",
+  "[12:33:01] USER: Thank you.",
+  "[12:33:01] USER: Bye.",
+  "[12:33:20] USER: My phone number is nine eight two zero zero one one",
+].join("\n");
+
+export const REAL_DELIVERY = {
+  to: "75db4b29-814b-4a4a-9d49-1b456654916f",
+  data: {
+    call_id: "webrtc-1791635459-064fa77f",
+    summary: "Rahul Sharma contacted Aangan Studio to request full design and execution services for his 3BHK flat in Baner, Pune.",
+    entities: null,
+    call_type: "webrtc_call",
+    room_name: "webrtc-1791635459-064fa77f",
+    end_reason: "Call Ended",
+    transcript: REAL_TRANSCRIPT,
+    dispositions: null,
+    phone_number: "web-user",
+    picked_up_at: "2026-10-10T12:31:06.728440+00:00",
+    call_duration: 133.51,
+    call_ended_at: "2026-10-10T12:33:21.161465+00:00",
+    call_started_at: "2026-10-10T12:31:09.177206+00:00",
+    technical_issue: false,
+  },
+  from: "web-user",
+  event: "call_postprocessing",
+  call_id: "webrtc-1791635459-064fa77f",
+  timestamp: "2026-10-10T12:34:38.055787+00:00",
+};

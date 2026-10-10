@@ -79,20 +79,30 @@ export async function verifyWithVaani(body: unknown, vaani: VaaniClient, now: Da
   if (d.status === "pending") return { ok: false, status: 503, reason: "Vaani has not finished processing this call yet" };
 
   const data = (typeof b.data === "object" && b.data ? b.data : {}) as Record<string, unknown>;
-  const ts = typeof b.timestamp === "string" ? new Date(b.timestamp) : null;
-  const plausible = ts && !Number.isNaN(ts.getTime()) && ts.getTime() <= now.getTime() + 5 * 60_000 && ts.getTime() >= now.getTime() - 7 * 86_400_000;
-  const endedAt = plausible ? ts! : now;
-  // Documented as milliseconds for call_postprocessing, but Vaani's test delivery sent 120 for a two minute call.
-  // No real call lasts under a second, so a value under 1000 is seconds.
+  const asDate = (v: unknown): Date | null => {
+    if (typeof v !== "string") return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const inRange = (d: Date | null) => d && d.getTime() <= now.getTime() + 5 * 60_000 && d.getTime() >= now.getTime() - 30 * 86_400_000;
+  // Vaani sends the real start and end times: use them. Fall back to the event time and the duration.
+  // call_duration is seconds in a real delivery (133.51 for a 2 minute call) although the docs say milliseconds
+  // for this event, so it is only used when the timestamps are missing: under 1000 means seconds.
   const rawDuration = typeof data.call_duration === "number" ? data.call_duration : 0;
-  const rawMs = rawDuration > 0 && rawDuration < 1000 ? rawDuration * 1000 : rawDuration;
-  const durationMs = Math.min(Math.max(rawMs, 0), FOUR_HOURS);
-  const pick = (...vals: unknown[]) => vals.find((v): v is string => typeof v === "string" && v.trim() !== "") ?? null;
+  const durationMs = Math.min(Math.max(rawDuration > 0 && rawDuration < 1000 ? rawDuration * 1000 : rawDuration, 0), FOUR_HOURS);
+  const evTs = asDate(b.timestamp);
+  const endedAt = inRange(asDate(data.call_ended_at)) ? asDate(data.call_ended_at)! : inRange(evTs) ? evTs! : now;
+  const startCandidate = asDate(data.call_started_at) ?? asDate(data.picked_up_at);
+  const startedAt = inRange(startCandidate) && startCandidate!.getTime() <= endedAt.getTime() ? startCandidate! : new Date(endedAt.getTime() - durationMs);
+  const durationSeconds = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
+  // Web test calls report "web-user". Only something that looks like a phone number is kept.
+  const phoneLike = (v: unknown): string | null => (typeof v === "string" && /^\+?[\d\s().-]{7,20}$/.test(v.trim()) ? v.trim() : null);
+  const pick = (...vals: unknown[]) => vals.map(phoneLike).find((v): v is string => v !== null) ?? null;
   const record: CallRecord = {
     callId,
-    startedAt: new Date(endedAt.getTime() - durationMs),
+    startedAt,
     endedAt,
-    durationSeconds: Math.round(durationMs / 1000),
+    durationSeconds,
     endReason: typeof data.end_reason === "string" ? data.end_reason : null,
     summary: d.summary,
     entities: d.entity,
@@ -100,7 +110,7 @@ export async function verifyWithVaani(body: unknown, vaani: VaaniClient, now: Da
     recordingUrl: typeof data.recording_url === "string" ? data.recording_url : null,
     transcript: d.transcription,
     turns: parseTranscript(d.transcription),
-    callerNumber: pick(data.phone_number, data.contact_number, data.caller_number, d.entity.phone_number, d.entity.phone, d.entity.mobile),
+    callerNumber: pick(data.phone_number, data.contact_number, data.caller_number, b.from, d.entity.phone_number, d.entity.phone, d.entity.mobile),
   };
   return { ok: true, kind: "call", callId, record };
 }

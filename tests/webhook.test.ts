@@ -11,6 +11,7 @@ import { PostCallStore } from "../src/lib/postcall/store";
 import { parseTranscript } from "../src/lib/postcall/transcript";
 import { MockVaaniClient } from "../src/lib/vaani/client";
 import { acceptWebhook } from "../src/lib/webhook/handler";
+import { REAL_DELIVERY, REAL_TRANSCRIPT } from "./fixtures/real-vaani-delivery";
 import { tokenOk, verifyWithVaani } from "../src/lib/webhook/verify";
 
 const root = join(import.meta.dirname, "..");
@@ -177,5 +178,52 @@ describe("Vaani batch envelope (real delivery shape)", () => {
     if (!v.ok || v.kind !== "call") throw new Error("expected a call");
     expect(v.record.durationSeconds).toBe(120);
     expect(v.record.startedAt.toISOString()).toBe("2026-10-12T04:34:00.000Z");
+  });
+});
+
+describe("the real Vaani delivery captured from production", () => {
+  it("parses a transcript whose turns are separated by single newlines (this was the bug)", () => {
+    const turns = parseTranscript(REAL_TRANSCRIPT);
+    expect(turns).toHaveLength(16);
+    expect(turns.filter((t) => t.role === "user")).toHaveLength(9);
+    expect(turns.filter((t) => t.role === "agent")).toHaveLength(7);
+    expect(turns[1]).toMatchObject({ role: "user", clock: "12:31:20" });
+    expect(turns[0]!.text).not.toContain("USER:");
+  });
+
+  it("also reads the plain label formats", () => {
+    expect(parseTranscript("Agent: Hello\nUser: Hi").map((t) => t.role)).toEqual(["agent", "user"]);
+    expect(parseTranscript("AGENT: Hi\n\n USER: Hello\nthere").map((t) => t.text)).toEqual(["Hi", "Hello\nthere"]);
+    expect(parseTranscript("[10:00:00] AGENT: a\n\n[10:00:05] USER: b")).toHaveLength(2);
+  });
+
+  it("uses Vaani's own start and end times, ignores the unit of call_duration, and drops the 'web-user' number", async () => {
+    vaani.calls.set(REAL_DELIVERY.call_id, { status: "ok", transcription: REAL_TRANSCRIPT, summary: REAL_DELIVERY.data.summary, entity: {} });
+    const v = await verifyWithVaani(REAL_DELIVERY, vaani, new Date("2026-10-10T12:35:00Z"));
+    if (!v.ok || v.kind !== "call") throw new Error("expected a call");
+    expect(v.record.startedAt.toISOString()).toBe("2026-10-10T12:31:09.177Z");
+    expect(v.record.endedAt.toISOString()).toBe("2026-10-10T12:33:21.161Z");
+    expect(v.record.durationSeconds).toBe(132);
+    expect(v.record.callerNumber).toBeNull();
+    expect(v.record.turns.filter((t) => t.role === "user").length).toBe(9);
+  });
+
+  it("a real phone number in `from` is kept", async () => {
+    vaani.calls.set("phone-1", { status: "ok", transcription: "AGENT: Hi\nUSER: Hello", summary: null, entity: {} });
+    const v = await verifyWithVaani({ event: "call_postprocessing", call_id: "phone-1", from: "+919820011223", data: { call_id: "phone-1", phone_number: "web-user" } }, vaani, NOW);
+    expect(v.ok && v.kind === "call" && v.record.callerNumber).toBe("+919820011223");
+  });
+
+  it("the real delivery is not saved as 'no caller speech': it is classified from the conversation", async () => {
+    vaani.calls.set(REAL_DELIVERY.call_id, { status: "ok", transcription: REAL_TRANSCRIPT, summary: REAL_DELIVERY.data.summary, entity: {} });
+    const EX = { answers: { project_type: "full_home", project_description: "3BHK", wants_design_and_execution: "yes", location_text: "Baner", weeks_until_needed: 20, decision_maker: "self" }, contact: { name: "Rahul Sharma", email: "rahul.sharma.test@example.com", phone: "9820011223" }, requested_items: [], agent: { stated_price: false, price_evidence: [], booking_started_turn: null, booking_confirmed: false, qualifying_complete_turn: 5, asked_for_email: true, gave_decline_close: false, caller_not_understood: false } };
+    const CL = { verdict: "qualified", criteria: Object.fromEntries(["real_project", "service_area", "timeline", "budget_band", "decision_maker"].map((c) => [c, { status: c === "budget_band" ? "not_mentioned" : "pass", evidence: "ok" }])), questions: [], question_to_ask: null, decline_reason: null, handoff_notes: [] };
+    const g = new MockGemini((req: GenerateRequest) => JSON.stringify(req.system.startsWith("You read the transcript") ? EX : CL));
+    const r = await acceptWebhook({ token: TOKEN, body: REAL_DELIVERY }, { store, vaani, expectedToken: TOKEN, now: () => new Date("2026-10-10T12:35:00Z") }, (record) =>
+      processCall(record, { store, gemini: g, config: loadConfig({ KNOWLEDGE_DIR: join(root, "knowledge") }), hubspot: new MockHubspotClient() }),
+    );
+    await r.after!();
+    const [c] = await q<{ status: string; failure_reason: string | null; caller_number: string | null }>("select status, failure_reason, caller_number from calls");
+    expect(c).toMatchObject({ status: "qualified", failure_reason: null, caller_number: null });
   });
 });
